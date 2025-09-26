@@ -17,24 +17,26 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup Release Environment
         run: |
-          chmod +x .github/scripts/release-utils.sh
+          chmod +x .github/scripts/release.py
           echo "✅ Release utilities ready"
 
       - name: Process Dependency Update and Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          source .github/scripts/release-utils.sh
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          echo "🚀 Processing: $PR_TITLE"
-          main "$PR_TITLE"
+          python3 .github/scripts/release.py "${{ github.event.pull_request.title }}"
           
       - name: Release Summary
         if: success()
