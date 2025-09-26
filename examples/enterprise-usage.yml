@@ -1,0 +1,92 @@
+# Enterprise OpenSSF Scorecard Analysis
+# Full feature configuration with notifications and thresholds
+
+name: Enterprise Security Analysis
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly analysis
+  workflow_dispatch:
+    inputs:
+      minimum_threshold:
+        description: 'Minimum acceptable score threshold'
+        required: true
+        default: '7.0'
+        type: string
+
+jobs:
+  security-scan:
+    name: Enterprise Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Enterprise Security Analysis
+        id: scorecard
+        uses: broadsage/scorecard-action@v1
+        with:
+          # Core Configuration
+          publish_results: true
+          results_format: 'sarif'
+          
+          # Enterprise Features
+          minimum_score_threshold: ${{ github.event.inputs.minimum_threshold || '7.0' }}
+          fail_on_score: false  # Don't fail, just report
+          
+          # Advanced Options
+          retention_days: 90
+          artifact_name: 'enterprise-security-analysis'
+          
+          # Notifications
+          slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+          slack_channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
+          webhook_url: ${{ secrets.SECURITY_DASHBOARD_WEBHOOK }}
+
+      - name: Security Analysis Results
+        run: |
+          echo "Overall Score: ${{ steps.scorecard.outputs.overall_score }}"
+          echo "Threshold Met: ${{ steps.scorecard.outputs.threshold_met }}"
+          echo "Total Checks: ${{ steps.scorecard.outputs.total_checks }}"
+          echo "Passed Checks: ${{ steps.scorecard.outputs.passed_checks }}"
+          echo "Failed Checks: ${{ steps.scorecard.outputs.failed_checks }}"
+          echo "Analysis Success: ${{ steps.scorecard.outputs.analysis_success }}"
+
+      - name: Comment PR with Results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const score = '${{ steps.scorecard.outputs.overall_score }}';
+            const threshold = '${{ steps.scorecard.outputs.threshold_met }}';
+            const passed = '${{ steps.scorecard.outputs.passed_checks }}';
+            const total = '${{ steps.scorecard.outputs.total_checks }}';
+            const failed = '${{ steps.scorecard.outputs.failed_checks }}';
+            
+            const comment = `## 🔐 Security Analysis Results
+            
+            | Metric | Value |
+            |--------|--------|
+            | **Overall Score** | ${score}/10.0 |
+            | **Threshold Met** | ${threshold === 'true' ? '✅ Yes' : '❌ No'} |
+            | **Checks Passed** | ${passed}/${total} |
+            | **Checks Failed** | ${failed} |
+            
+            📊 View detailed results in the [job summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

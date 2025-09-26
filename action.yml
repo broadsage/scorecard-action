@@ -1,0 +1,343 @@
+name: 'OpenSSF Scorecard Workflow'
+description: 'Workflow enhancements for OpenSSF Scorecard with notifications, thresholds, and reporting'
+author: 'Broadsage Security Team'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  # Core Configuration (passed to official action)
+  repo_token:
+    description: 'GitHub token for analysis (defaults to GITHUB_TOKEN)'
+    required: false
+    default: ${{ github.token }}
+  
+  results_file:
+    description: 'Path to save scorecard results'
+    required: false
+    default: 'scorecard-results.sarif'
+  
+  results_format:
+    description: 'Output format (sarif, json)'
+    required: false
+    default: 'sarif'
+  
+  publish_results:
+    description: 'Publish results to OpenSSF API'
+    required: false
+    default: 'true'
+  
+  # Workflow Enhancement Features
+  minimum_score_threshold:
+    description: 'Minimum acceptable score (0.0-10.0) for workflow decisions'
+    required: false
+    default: '6.0'
+  
+  fail_on_score:
+    description: 'Fail action if score below threshold'
+    required: false
+    default: 'false'
+  
+  # Notification Features
+  slack_bot_token:
+    description: 'Slack Bot Token for notifications'
+    required: false
+    default: ''
+  
+  slack_channel_id:
+    description: 'Slack channel ID for notifications'
+    required: false
+    default: ''
+  
+  webhook_url:
+    description: 'Generic webhook URL for notifications'
+    required: false
+    default: ''
+  
+  # Artifact Management
+  retention_days:
+    description: 'Days to retain artifacts'
+    required: false
+    default: '30'
+  
+  artifact_name:
+    description: 'Name for uploaded artifacts'
+    required: false
+    default: 'scorecard-analysis-results'
+
+outputs:
+  # Core Outputs (from official Scorecard action)
+  overall_score:
+    description: 'Overall OpenSSF Scorecard score (0.0-10.0)'
+    value: ${{ steps.extract-score.outputs.score }}
+  
+  passed_checks:
+    description: 'Number of checks passed'
+    value: ${{ steps.extract-score.outputs.passed_checks }}
+  
+  total_checks:
+    description: 'Total number of checks performed'  
+    value: ${{ steps.extract-score.outputs.total_checks }}
+  
+  failed_checks:
+    description: 'Number of checks failed'
+    value: ${{ steps.extract-score.outputs.failed_checks }}
+    
+  # Workflow Enhancement Outputs
+  threshold_met:
+    description: 'Whether score meets minimum threshold'
+    value: ${{ steps.check-threshold.outputs.threshold_met }}
+    
+  analysis_success:
+    description: 'Whether analysis completed successfully'
+    value: ${{ steps.scorecard-analysis.outputs.success || 'true' }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Official OpenSSF Scorecard Action
+      id: scorecard-analysis
+      uses: ossf/scorecard-action@v2.4.2
+      with:
+        results_file: ${{ inputs.results_file }}
+        results_format: ${{ inputs.results_format }}
+        repo_token: ${{ inputs.repo_token }}
+        publish_results: ${{ inputs.publish_results }}
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: inputs.results_format == 'sarif'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.results_file }}
+        category: 'OpenSSF Scorecard'
+
+    - name: Extract Score and Metrics
+      id: extract-score
+      shell: bash
+      run: |
+        echo "📊 Extracting score from results..."
+        
+        if [[ ! -f "${{ inputs.results_file }}" ]]; then
+          echo "❌ Results file not found: ${{ inputs.results_file }}"
+          exit 1
+        fi
+        
+        # Extract score based on file format
+        if [[ "${{ inputs.results_format }}" == "sarif" ]]; then
+          # Extract from SARIF format
+          if jq -e '.runs[0].properties.score' "${{ inputs.results_file }}" > /dev/null 2>&1; then
+            SCORE=$(jq -r '.runs[0].properties.score' "${{ inputs.results_file }}")
+          else
+            # Fallback: calculate from individual rule results
+            TOTAL_RULES=$(jq -r '.runs[0].tool.driver.rules | length' "${{ inputs.results_file }}")
+            PASSED_RULES=$(jq -r '[.runs[0].results[] | select(.level != "error")] | length' "${{ inputs.results_file }}")
+            if [[ "$TOTAL_RULES" -gt 0 ]]; then
+              SCORE=$(echo "scale=1; $PASSED_RULES * 10.0 / $TOTAL_RULES" | bc -l)
+            else
+              SCORE="0.0"
+            fi
+          fi
+          
+          # Count checks from SARIF
+          TOTAL_CHECKS=$(jq -r '.runs[0].tool.driver.rules | length' "${{ inputs.results_file }}")
+          FAILED_RESULTS=$(jq -r '[.runs[0].results[] | select(.level == "error")] | length' "${{ inputs.results_file }}")
+          PASSED_CHECKS=$((TOTAL_CHECKS - FAILED_RESULTS))
+          FAILED_CHECKS=$FAILED_RESULTS
+          
+        elif [[ "${{ inputs.results_format }}" == "json" ]]; then
+          # Extract from JSON format  
+          SCORE=$(jq -r '.score' "${{ inputs.results_file }}")
+          CHECKS=$(jq -r '.checks | length' "${{ inputs.results_file }}")
+          PASSED_CHECKS=$(jq -r '[.checks[] | select(.score >= 0)] | length' "${{ inputs.results_file }}")
+          TOTAL_CHECKS=$CHECKS
+          FAILED_CHECKS=$((TOTAL_CHECKS - PASSED_CHECKS))
+        fi
+        
+        # Set outputs
+        echo "score=${SCORE:-0.0}" >> $GITHUB_OUTPUT
+        echo "total_checks=${TOTAL_CHECKS:-0}" >> $GITHUB_OUTPUT  
+        echo "passed_checks=${PASSED_CHECKS:-0}" >> $GITHUB_OUTPUT
+        echo "failed_checks=${FAILED_CHECKS:-0}" >> $GITHUB_OUTPUT
+        
+        echo "📈 Scorecard Results:"
+        echo "  Overall Score: ${SCORE:-0.0}/10.0"
+        echo "  Checks: ${PASSED_CHECKS:-0}/${TOTAL_CHECKS:-0} passed"
+
+    - name: Check Score Threshold
+      id: check-threshold
+      shell: bash
+      run: |
+        SCORE="${{ steps.extract-score.outputs.score }}"
+        THRESHOLD="${{ inputs.minimum_score_threshold }}"
+        
+        if ! command -v bc &> /dev/null; then
+          echo "⚠️ bc not available, using simple comparison"
+          if (( $(echo "$SCORE >= $THRESHOLD" | awk '{print ($1 >= $2)}') )); then
+            echo "threshold_met=true" >> $GITHUB_OUTPUT
+            echo "✅ Score $SCORE meets threshold $THRESHOLD"
+          else
+            echo "threshold_met=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Score $SCORE below threshold $THRESHOLD"
+          fi
+        else
+          if (( $(echo "$SCORE >= $THRESHOLD" | bc -l) )); then
+            echo "threshold_met=true" >> $GITHUB_OUTPUT
+            echo "✅ Score $SCORE meets threshold $THRESHOLD"
+          else
+            echo "threshold_met=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Score $SCORE below threshold $THRESHOLD"
+          fi
+        fi
+        
+        # Fail if requested and threshold not met
+        if [[ "${{ inputs.fail_on_score }}" == "true" && "${{ steps.check-threshold.outputs.threshold_met }}" == "false" ]]; then
+          echo "❌ Failing action due to score below threshold"
+          exit 1
+        fi
+
+    - name: Generate Enhanced Report
+      shell: bash
+      run: |
+        echo "📋 Generating enhanced report..."
+        
+        cat << 'EOF' > scorecard-summary.md
+        # OpenSSF Scorecard Analysis Report
+        
+        **Repository:** ${{ github.repository }}  
+        **Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')  
+        **Workflow:** ${{ github.workflow }}
+        
+        ## Results Summary
+        
+        | Metric | Value |
+        |--------|--------|
+        | **Overall Score** | ${{ steps.extract-score.outputs.score }}/10.0 |
+        | **Total Checks** | ${{ steps.extract-score.outputs.total_checks }} |
+        | **Passed Checks** | ${{ steps.extract-score.outputs.passed_checks }} |
+        | **Failed Checks** | ${{ steps.extract-score.outputs.failed_checks }} |
+        | **Threshold** | ${{ inputs.minimum_score_threshold }} |
+        | **Threshold Met** | ${{ steps.check-threshold.outputs.threshold_met == 'true' && '✅ Yes' || '❌ No' }} |
+        
+        ## Score Interpretation
+        
+        The OpenSSF Scorecard evaluates your repository against security best practices:
+        - **9.0-10.0**: Excellent security posture
+        - **7.0-8.9**: Good security practices  
+        - **5.0-6.9**: Moderate security implementation
+        - **3.0-4.9**: Basic security measures
+        - **0.0-2.9**: Significant security improvements needed
+        
+        ## Next Steps
+        
+        1. Review individual check results in the Security tab
+        2. Address failing security checks
+        3. Consider implementing missing security practices
+        4. Re-run analysis after improvements
+        
+        ---
+        *Generated by OpenSSF Scorecard Workflow Enhancement*
+        EOF
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: |
+          ${{ inputs.results_file }}
+          scorecard-summary.md
+        retention-days: ${{ inputs.retention_days }}
+
+    - name: Send Slack Notification
+      if: inputs.slack_bot_token != '' && inputs.slack_channel_id != ''
+      uses: slackapi/slack-github-action@v2.1.1
+      with:
+        channel-id: ${{ inputs.slack_channel_id }}
+        payload: |
+          {
+            "text": "🔒 OpenSSF Scorecard Analysis Complete",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "🔒 Security Analysis Results"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Repository:*\n${{ github.repository }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Score:*\n${{ steps.extract-score.outputs.score }}/10.0"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Checks Passed:*\n${{ steps.extract-score.outputs.passed_checks }}/${{ steps.extract-score.outputs.total_checks }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Threshold Met:*\n${{ steps.check-threshold.outputs.threshold_met == 'true' && '✅ Yes' || '❌ No' }}"
+                  }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text", 
+                      "text": "📊 View Report"
+                    },
+                    "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }
+            ]
+          }
+      env:
+        SLACK_BOT_TOKEN: ${{ inputs.slack_bot_token }}
+
+    - name: Send Webhook Notification
+      if: inputs.webhook_url != ''
+      shell: bash
+      run: |
+        echo "📡 Sending webhook notification..."
+        
+        # Create JSON payload
+        cat << EOF > webhook-payload.json
+        {
+          "repository": "${{ github.repository }}",
+          "score": "${{ steps.extract-score.outputs.score }}",
+          "total_checks": ${{ steps.extract-score.outputs.total_checks }},
+          "passed_checks": ${{ steps.extract-score.outputs.passed_checks }},
+          "failed_checks": ${{ steps.extract-score.outputs.failed_checks }},
+          "threshold": "${{ inputs.minimum_score_threshold }}",
+          "threshold_met": ${{ steps.check-threshold.outputs.threshold_met }},
+          "workflow_run": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+          "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        }
+        EOF
+        
+        # Send webhook with retry logic
+        for i in {1..3}; do
+          if curl -X POST \
+            -H "Content-Type: application/json" \
+            -d @webhook-payload.json \
+            "${{ inputs.webhook_url }}"; then
+            echo "✅ Webhook sent successfully"
+            break
+          else
+            echo "⚠️ Webhook attempt $i failed"
+            if [[ $i -eq 3 ]]; then
+              echo "❌ All webhook attempts failed"
+            else
+              sleep $((i * 2))
+            fi
+          fi
+        done    

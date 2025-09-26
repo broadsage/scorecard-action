@@ -1,0 +1,96 @@
+# Pull Request Security Gate
+# Strict security validation for pull requests
+
+name: PR Security Gate
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Security Gate Analysis
+        id: security-gate
+        uses: broadsage/scorecard-action@v1
+        with:
+          # Strict Configuration
+          minimum_score_threshold: '8.0'
+          fail_on_score: true  # Fail PR if score is below threshold
+          
+          # Results
+          publish_results: true
+          results_format: 'sarif'
+
+      - name: Security Gate Status
+        if: always()
+        run: |
+          if [[ "${{ steps.security-gate.outputs.threshold_met }}" == "true" ]]; then
+            echo "✅ Security gate PASSED"
+            echo "Score: ${{ steps.security-gate.outputs.overall_score }}/10.0"
+          else
+            echo "❌ Security gate FAILED"
+            echo "Score: ${{ steps.security-gate.outputs.overall_score }}/10.0 (Required: 8.0+)"
+            echo "Please address security recommendations before merging."
+          fi
+
+      - name: Update PR Status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const score = parseFloat('${{ steps.security-gate.outputs.overall_score }}');
+            const threshold = 8.0;
+            const thresholdMet = '${{ steps.security-gate.outputs.threshold_met }}' === 'true';
+            const passed = '${{ steps.security-gate.outputs.passed_checks }}';
+            const failed = '${{ steps.security-gate.outputs.failed_checks }}';
+            const total = '${{ steps.security-gate.outputs.total_checks }}';
+            
+            const status = thresholdMet ? '✅ PASSED' : '❌ FAILED';
+            const emoji = thresholdMet ? '🟢' : '🔴';
+            
+            const comment = `## ${emoji} Security Gate ${status}
+            
+            | Metric | Value | Status |
+            |--------|--------|--------|
+            | **Security Score** | ${score}/10.0 | ${thresholdMet ? '✅' : '❌'} (Required: ${threshold}+) |
+            | **Checks Passed** | ${passed}/${total} | ${failed > 0 ? '⚠️' : '✅'} |
+            | **Checks Failed** | ${failed} | ${failed > 0 ? '❌' : '✅'} |
+            
+            ${!thresholdMet ? 
+              '⚠️ **Action Required**: This PR does not meet the minimum security threshold. Please address the security recommendations before merging.' : 
+              '✅ **All Clear**: This PR meets security requirements and is ready for review.'}
+            
+            📊 [View detailed security report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            }); 
+              '⚠️ **Action Required**: This PR does not meet the minimum security threshold. Please review and address the security recommendations before merging.' : 
+              '✅ **Security Requirements Met**: This PR meets all security requirements and can be merged.'
+            }
+            
+            📊 [View Detailed Analysis](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

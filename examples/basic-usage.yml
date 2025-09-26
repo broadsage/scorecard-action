@@ -1,0 +1,31 @@
+# Basic OpenSSF Scorecard Analysis
+# Minimal configuration for standard security analysis
+
+name: Security Analysis
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly analysis every Monday at 2 AM UTC
+
+jobs:
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run OpenSSF Scorecard Analysis
+        uses: broadsage/scorecard-action@v1
+        with:
+          publish_results: true
