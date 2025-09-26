@@ -166,6 +166,23 @@ create_and_publish_release() {
     
     echo "🚀 Creating release $version" >&2
     
+    # Determine category icon for release title
+    local category_icon="📦"
+    case "$action_name" in
+        "ossf/scorecard-action")
+            category_icon="🔒"
+            ;;
+        "github/codeql-action"*)
+            category_icon="🛡️"
+            ;;
+        "actions/checkout"|"actions/upload-artifact"|"actions/cache")
+            category_icon="🏗️"
+            ;;
+        "slackapi/slack-github-action")
+            category_icon="🔗"
+            ;;
+    esac
+    
     # Configure git for automated commits
     git config user.name "github-actions[bot]"
     git config user.email "github-actions[bot]@users.noreply.github.com"
