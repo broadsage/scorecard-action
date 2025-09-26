@@ -1,0 +1,21 @@
+# Dependabot configuration for automatic dependency updates
+# This will automatically create PRs when new versions of GitHub Actions are available
+
+version: 2
+updates:
+  # Update GitHub Actions used in workflows and composite actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "feat"
+      prefix-development: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
