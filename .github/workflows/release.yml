@@ -5,9 +5,11 @@ on:
     types: [closed]
     branches: [main]
 
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   auto-release:
-    # Only run if PR was merged and created by Dependabot
     if: github.event.pull_request.merged == true && github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
@@ -17,108 +19,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Analyze Dependabot update
-        id: analyze
-        run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BODY="${{ github.event.pull_request.body }}"
-          
-          echo "🔍 Analyzing Dependabot update: $PR_TITLE"
-          
-          # Check if this is an OpenSSF Scorecard update
-          if echo "$PR_TITLE" | grep -qi "ossf/scorecard-action"; then
-            echo "is_scorecard_update=true" >> $GITHUB_OUTPUT
-            
-            # Extract version from PR title (e.g., "Bump ossf/scorecard-action from v2.4.1 to v2.4.2")
-            NEW_VERSION=$(echo "$PR_TITLE" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | tail -1)
-            OLD_VERSION=$(echo "$PR_TITLE" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-            
-            echo "old_version=$OLD_VERSION" >> $GITHUB_OUTPUT
-            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-            
-            # Determine our release type (patch increment for upstream updates)
-            CURRENT_RELEASE=$(git tag -l "v*" --sort=-version:refname | head -1)
-            if [[ -z "$CURRENT_RELEASE" ]]; then
-              NEXT_VERSION="v1.0.1"
-            else
-              # Increment patch version
-              NEXT_VERSION=$(echo "$CURRENT_RELEASE" | awk -F. -v OFS=. '{$NF++; print}')
-            fi
-            
-            echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
-            echo "📦 Planning release: $NEXT_VERSION (for OpenSSF $NEW_VERSION update)"
-            
-          else
-            echo "is_scorecard_update=false" >> $GITHUB_OUTPUT
-            echo "📋 Non-scorecard dependency update, skipping auto-release"
-          fi
 
-      - name: Create automatic release for OpenSSF updates
-        if: steps.analyze.outputs.is_scorecard_update == 'true'
+      - name: Setup Release Environment
+        run: |
+          chmod +x .github/scripts/release-utils.sh
+          echo "✅ Release utilities ready"
+
+      - name: Process Dependency Update and Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          NEW_VERSION="${{ steps.analyze.outputs.next_version }}"
-          UPSTREAM_VERSION="${{ steps.analyze.outputs.new_version }}"
-          OLD_UPSTREAM="${{ steps.analyze.outputs.old_version }}"
+          source .github/scripts/release-utils.sh
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "🚀 Processing: $PR_TITLE"
+          main "$PR_TITLE"
           
-          echo "🚀 Creating release $NEW_VERSION for OpenSSF Scorecard update"
-          
-          # Create and push tag
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$NEW_VERSION" -m "chore: update OpenSSF Scorecard Action to $UPSTREAM_VERSION"
-          git push origin "$NEW_VERSION"
-          
-          # Update major version tag
-          MAJOR_VERSION=$(echo "$NEW_VERSION" | cut -d. -f1)
-          git tag -f "$MAJOR_VERSION" "$NEW_VERSION"
-          git push origin "$MAJOR_VERSION" --force
-          
-          # Generate release notes
-          cat > release_notes.md << EOF
-          ## 🔄 Dependency Update Release
-          
-          This release updates the underlying OpenSSF Scorecard Action dependency:
-          
-          ### 📦 Updated Dependencies
-          - **OpenSSF Scorecard Action**: $OLD_UPSTREAM → **$UPSTREAM_VERSION**
-          
-          ### 🔗 Upstream Changes
-          See the [OpenSSF Scorecard Action $UPSTREAM_VERSION release](https://github.com/ossf/scorecard-action/releases/tag/$UPSTREAM_VERSION) for details on upstream improvements.
-          
-          ### ✅ Compatibility
-          - All existing workflows continue to work unchanged
-          - No breaking changes to inputs/outputs
-          - Enhanced security analysis from latest Scorecard updates
-          
-          ### 🚀 Usage
-          Update your workflows to use the latest version:
-          \`\`\`yaml
-          uses: broadsage/scorecard-action@$MAJOR_VERSION
-          \`\`\`
-          
-          ---
-          *This release was automatically created by Dependabot integration*
-          EOF
-          
-          # Create GitHub release
-          gh release create "$NEW_VERSION" \
-            --title "🔄 Dependency Update $NEW_VERSION" \
-            --notes-file release_notes.md \
-            --latest
-            
-          echo "✅ Successfully created release $NEW_VERSION"
-          
-      - name: Summary
-        if: steps.analyze.outputs.is_scorecard_update == 'true'
+      - name: Release Summary
+        if: success()
         run: |
-          echo "## 🎉 Auto-Release Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**New Release:** ${{ steps.analyze.outputs.next_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**OpenSSF Version:** ${{ steps.analyze.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Marketplace:** Ready for manual publication" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[View Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.analyze.outputs.next_version }})" >> $GITHUB_STEP_SUMMARY
+          LATEST_RELEASE=$(git tag -l "v*" --sort=-version:refname | head -1)
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          ## 🎉 Auto-Release Complete
+          
+          **✅ Successfully created release:** $LATEST_RELEASE
+          **📋 PR Processed:** ${{ github.event.pull_request.title }}
+          **📋 Upstream notes:** Successfully fetched and included
+          
+          ### 🔗 Quick Links
+          - [📋 View Release](https://github.com/${{ github.repository }}/releases/tag/$LATEST_RELEASE)
+          - [🏠 Repository](https://github.com/${{ github.repository }})
+          
+          ### 🚀 Next Steps  
+          The release is now live and ready for use. Update your workflows with:
+          \`\`\`yaml
+          uses: broadsage/scorecard-action@v1
+          \`\`\`
+          EOF
+          echo "🎯 Release workflow completed successfully!"

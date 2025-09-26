@@ -1,21 +1,60 @@
-# Dependabot configuration for automatic dependency updates
-# This will automatically create PRs when new versions of GitHub Actions are available
+# Enhanced Dependabot configuration for intelligent GitHub Actions dependency management
+# Provides tiered update strategies based on action criticality and impact
 
 version: 2
 updates:
-  # Update GitHub Actions used in workflows and composite actions
+  # GitHub Actions dependency management with intelligent grouping
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-      time: "06:00"
-    open-pull-requests-limit: 10
+      day: "monday" 
+      time: "09:00"
+    open-pull-requests-limit: 12
+    
+    # Intelligent grouping strategy for different action types
+    groups:
+      # 🔒 Critical Security Actions (High Priority)
+      security-actions:
+        patterns:
+          - "ossf/scorecard-action"
+          - "github/codeql-action/*"
+          - "step-security/*"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # 🏗️ Infrastructure Actions (Stable, Auto-mergeable)
+      infrastructure-actions:
+        patterns:
+          - "actions/checkout"
+          - "actions/upload-artifact"
+          - "actions/download-artifact"
+          - "actions/cache"
+          - "actions/setup-*"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # 🔗 Integration Actions (Review Required)
+      integration-actions:
+        patterns:
+          - "slackapi/slack-github-action"
+          - "*webhook*"
+          - "*notification*"
+        update-types:
+          - "minor"
+          - "patch"
+    
+    # Commit message configuration
     commit-message:
-      prefix: "feat"
-      prefix-development: "chore"
+      prefix: "chore"
+      prefix-development: "deps"
       include: "scope"
+    
+    # Enhanced labeling for better categorization
     labels:
       - "dependencies"
       - "github-actions"
       - "automated"
+      - "security-update"

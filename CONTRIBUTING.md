@@ -55,7 +55,3 @@ This action enhances OpenSSF Scorecard by:
 
 - **Issues**: [GitHub Issues](https://github.com/broadsage/scorecard-action/issues)
 - **Security**: [security@broadsage.com](mailto:security@broadsage.com)
-
----
-
-Keep it simple! This is a workflow enhancement tool, not an enterprise platform. 🚀

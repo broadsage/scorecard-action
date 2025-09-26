@@ -1,4 +1,4 @@
-name: 'OpenSSF Scorecard Workflow'
+name: 'OpenSSF Scorecard Action'
 description: 'Workflow enhancements for OpenSSF Scorecard with notifications, thresholds, and reporting'
 author: 'Broadsage Security Team'
 
