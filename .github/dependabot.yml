@@ -29,7 +29,7 @@ updates:
       - "dependencies"
       - "actions"
 
-      # Group definitions for related dependencies
+    # Group definitions for related dependencies
     groups:
       # Group for version control system related dependencies
       actions-dependencies:

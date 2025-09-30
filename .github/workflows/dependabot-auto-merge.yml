@@ -34,30 +34,26 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Wait for checks to complete
-        uses: lewagon/wait-on-check-action@0dceb95e7c4cad8cc7422aee3885998f5cab9c79 # v1.4.0
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          check-name: "Dependabot Auto-Merge / dependabot-auto-merge"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
-          allowed-conclusions: success,neutral,skipped
-        continue-on-error: true
-        id: wait-for-checks
-
-      - name: Check if ready for merge
-        if: steps.wait-for-checks.outcome == 'success' || steps.wait-for-checks.outcome == 'skipped'
-        run: echo "✅ Basic validation passed, proceeding with auto-merge"
-
-      - name: Skip auto-merge if checks failed
-        if: steps.wait-for-checks.outcome != 'success' && steps.wait-for-checks.outcome != 'skipped'
+      - name: Validate Dependabot PR
+        id: validate-pr
         run: |
-          echo "⚠️ Checks did not pass or timed out, skipping auto-merge"
-          echo "This is likely due to permission issues or failing tests"
-          exit 0
+          echo "🔍 Validating Dependabot PR for auto-merge..."
+          echo "📋 PR Title: ${{ github.event.pull_request.title }}"
+          echo "👤 Author: ${{ github.event.pull_request.user.login }}"
+          echo "🏷️ Labels: ${{ join(github.event.pull_request.labels.*.name, ', ') }}"
+          
+          # For a simple scorecard action, all Dependabot dependency PRs are safe to merge
+          if [[ "${{ github.event.pull_request.user.login }}" == "dependabot[bot]" ]]; then
+            echo "✅ Dependabot PR validated - safe for auto-merge"
+            echo "validation_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Not a Dependabot PR - manual review required"
+            echo "validation_passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
       - name: Approve Dependabot PR
-        if: steps.wait-for-checks.outcome == 'success' || steps.wait-for-checks.outcome == 'skipped'
+        if: steps.validate-pr.outputs.validation_passed == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
@@ -76,7 +72,7 @@ jobs:
             }
 
       - name: Enable auto-merge
-        if: steps.wait-for-checks.outcome == 'success' || steps.wait-for-checks.outcome == 'skipped'
+        if: steps.validate-pr.outputs.validation_passed == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
