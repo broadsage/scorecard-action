@@ -68,6 +68,30 @@ jobs:
         run: |
           python3 .github/scripts/release.py
           
+      - name: Collect Release Metrics
+        if: success() && inputs.dry_run != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+          VERSION_TYPE: ${{ env.VERSION_TYPE }}
+        run: |
+          # Record release event for metrics
+          mkdir -p metrics
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          RELEASE_DATA=$(cat <<EOF
+          {
+            "timestamp": "$TIMESTAMP",
+            "event_type": "release_created",
+            "trigger": "$TRIGGER_EVENT",
+            "version_type": "$VERSION_TYPE",
+            "repository": "$REPOSITORY"
+          }
+          EOF
+          )
+          echo "$RELEASE_DATA" >> metrics/release_events.jsonl
+          echo "📊 Release metrics recorded"
+
       - name: Release Summary
         if: success()
         run: |
@@ -90,6 +114,7 @@ jobs:
               echo "### 🔗 Quick Links"
               echo "- [📋 View Release](https://github.com/${{ github.repository }}/releases/tag/$LATEST_RELEASE)"
               echo "- [🏠 Repository](https://github.com/${{ github.repository }})"
+              echo "- [📊 Metrics Dashboard](https://github.com/${{ github.repository }}/blob/main/dashboard/index.html)"
               echo ""
               echo "### 🚀 Next Steps"
               echo "The release is now live and ready for use. Update your workflows with:"
