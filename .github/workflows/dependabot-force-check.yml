@@ -31,7 +31,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         
       - name: Force Dependabot Update Check
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
@@ -98,7 +98,7 @@ jobs:
           echo "  - step-security/harden-runner@v2.13.1"
           echo "  - lewagon/wait-on-check-action@v1.4.0"
           echo "  - actions/github-script@v8.0.0"
-          echo "  - actions/checkout@v4"
+          echo "  - actions/checkout@v5"
           echo "  - stenjo/devops-metrics-action@v1"
           echo ""
           echo "🤖 Auto-merge Status: ✅ ALL DEPENDENCY PRS WILL BE AUTO-MERGED"
