@@ -43,5 +43,3 @@ updates:
       - "dependencies"
       - "github-actions"
       - "automated"
-    
-    ignore: []
