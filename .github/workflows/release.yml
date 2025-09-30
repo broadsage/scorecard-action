@@ -1,13 +1,37 @@
-name: Auto-Release on Dependabot Updates
+name: Smart Release Workflow
 
 on:
   pull_request:
     types: [closed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version increment type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+      release_notes:
+        description: 'Custom release notes (optional)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run - validate without creating release'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  auto-release:
-    if: github.event.pull_request.merged == true && github.event.pull_request.user.login == 'dependabot[bot]'
+  smart-release:
+    if: |
+      (github.event_name == 'pull_request' && 
+       github.event.pull_request.merged == true && 
+       github.event.pull_request.user.login == 'dependabot[bot]') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -32,31 +56,45 @@ jobs:
           chmod +x .github/scripts/release.py
           echo "✅ Release utilities ready"
 
-      - name: Process Dependency Update and Create Release
+      - name: Process Smart Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRIGGER_TYPE: ${{ github.event_name }}
+          VERSION_TYPE: ${{ inputs.version_type || 'patch' }}
+          CUSTOM_NOTES: ${{ inputs.release_notes || '' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          PR_TITLE: ${{ github.event.pull_request.title || '' }}
         run: |
-          python3 .github/scripts/release.py "${{ github.event.pull_request.title }}"
+          python3 .github/scripts/release.py
           
       - name: Release Summary
         if: success()
         run: |
-          LATEST_RELEASE=$(git tag -l "v*" --sort=-version:refname | head -1)
-          cat << EOF >> $GITHUB_STEP_SUMMARY
-          ## 🎉 Auto-Release Complete
-          
-          **✅ Successfully created release:** $LATEST_RELEASE
-          **📋 PR Processed:** ${{ github.event.pull_request.title }}
-          **📋 Upstream notes:** Successfully fetched and included
-          
-          ### 🔗 Quick Links
-          - [📋 View Release](https://github.com/${{ github.repository }}/releases/tag/$LATEST_RELEASE)
-          - [🏠 Repository](https://github.com/${{ github.repository }})
-          
-          ### 🚀 Next Steps  
-          The release is now live and ready for use. Update your workflows with:
-          \`\`\`yaml
-          uses: broadsage/scorecard-action@v1
-          \`\`\`
-          EOF
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "## 🧪 Dry Run Complete" >> $GITHUB_STEP_SUMMARY
+            echo "**✅ Validation successful - no release created**" >> $GITHUB_STEP_SUMMARY
+            echo "**🔍 Trigger:** ${TRIGGER_TYPE}" >> $GITHUB_STEP_SUMMARY
+            echo "**📦 Version Type:** ${VERSION_TYPE}" >> $GITHUB_STEP_SUMMARY
+          else
+            LATEST_RELEASE=$(git tag -l "v*" --sort=-version:refname | head -1)
+            TRIGGER_DISPLAY="${{ github.event_name == 'workflow_dispatch' && '🖱️ Manual' || '🤖 Dependabot' }}"
+            cat << EOF >> $GITHUB_STEP_SUMMARY
+            ## 🎉 Smart Release Complete
+            
+            **✅ Successfully created release:** $LATEST_RELEASE
+            **� Trigger Type:** $TRIGGER_DISPLAY
+            **📦 Version Type:** ${VERSION_TYPE}
+            ${{ github.event_name == 'pull_request' && format('**📋 PR Processed:** {0}', github.event.pull_request.title) || '' }}
+            
+            ### 🔗 Quick Links
+            - [📋 View Release](https://github.com/${{ github.repository }}/releases/tag/$LATEST_RELEASE)
+            - [🏠 Repository](https://github.com/${{ github.repository }})
+            
+            ### 🚀 Next Steps  
+            The release is now live and ready for use. Update your workflows with:
+            \`\`\`yaml
+            uses: broadsage/scorecard-action@v1
+            \`\`\`
+            EOF
+          fi
           echo "🎯 Release workflow completed successfully!"
