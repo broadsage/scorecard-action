@@ -1,4 +1,4 @@
-name: Auto-merge Dependabot PRs
+name: Dependabot Auto-merge
 
 on:
   pull_request_target:
@@ -107,31 +107,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Record Auto-merge Metrics
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          AUTO_MERGE_DECISION: ${{ steps.pr-check.outputs.auto_merge }}
-          DECISION_REASON: ${{ steps.pr-check.outputs.reason }}
+      - name: Log Auto-merge Decision
         run: |
-          # Record auto-merge decision for metrics
-          mkdir -p metrics
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          MERGE_DATA=$(cat <<EOF
-          {
-            "timestamp": "$TIMESTAMP",
-            "event_type": "auto_merge_decision",
-            "pr_number": $PR_NUMBER,
-            "pr_title": "$PR_TITLE",
-            "auto_merge_approved": $AUTO_MERGE_DECISION,
-            "decision_reason": "$DECISION_REASON",
-            "repository": "${{ github.repository }}"
-          }
-          EOF
-          )
-          echo "$MERGE_DATA" >> metrics/automation_events.jsonl
-          echo "📊 Auto-merge metrics recorded"
+          echo "🤖 Auto-merge Decision: ${{ steps.pr-check.outputs.auto_merge }}"
+          echo "📋 Reason: ${{ steps.pr-check.outputs.reason }}"
 
       - name: Summary
         run: |
@@ -144,4 +123,4 @@ jobs:
             echo "**Reason:** ${{ steps.pr-check.outputs.reason }}" >> $GITHUB_STEP_SUMMARY
             echo "**Action:** PR awaiting manual review and approval" >> $GITHUB_STEP_SUMMARY
           fi
-          echo "📊 [View Metrics Dashboard](https://github.com/${{ github.repository }}/blob/main/dashboard/index.html)" >> $GITHUB_STEP_SUMMARY
+          echo "📊 [View DORA Metrics](https://github.com/${{ github.repository }}/actions/workflows/dora-metrics.yml)" >> $GITHUB_STEP_SUMMARY

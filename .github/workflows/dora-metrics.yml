@@ -1,0 +1,45 @@
+name: DORA Metrics Collection
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  dora-metrics:
+    name: Collect DORA Metrics
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: DevOps Metrics from GitHub
+        id: dora  
+        uses: stenjo/devops-metrics-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repo: ${{ github.repository }}
+        continue-on-error: true
+          
+      - name: Display Results
+        if: always()
+        run: |
+          echo "📊 DORA Metrics Results"
+          echo "======================"
+          if [[ "${{ steps.dora.outcome }}" == "success" ]]; then
+            echo "📦 Deploy Frequency: ${{ steps.dora.outputs.deploy-frequency }} releases/week"
+            echo "⏱️ Lead Time: ${{ steps.dora.outputs.lead-time }} days"  
+            echo "🚨 Change Failure Rate: ${{ steps.dora.outputs.change-failure-rate }}%"
+            echo "🔧 Mean Time to Restore: ${{ steps.dora.outputs.mttr }} hours"
+            echo ""
+            echo "✅ Using proven marketplace action: stenjo/devops-metrics-action"
+          else
+            echo "⚠️ Metrics collection failed or repository may not have enough data"
+            echo "💡 Ensure repository has releases, issues, and PRs for accurate DORA metrics"
+          fi

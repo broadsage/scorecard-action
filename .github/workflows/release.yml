@@ -1,4 +1,4 @@
-name: Smart Release Workflow
+name: Release Automation
 
 on:
   pull_request:
@@ -26,7 +26,7 @@ on:
         type: boolean
 
 jobs:
-  smart-release:
+  release:
     if: |
       (github.event_name == 'pull_request' && 
        github.event.pull_request.merged == true && 
@@ -57,7 +57,7 @@ jobs:
           chmod +x .github/scripts/release.py
           echo "✅ Release utilities ready"
 
-      - name: Process Smart Release
+      - name: Process Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRIGGER_TYPE: ${{ github.event_name }}
@@ -68,29 +68,12 @@ jobs:
         run: |
           python3 .github/scripts/release.py
           
-      - name: Collect Release Metrics
-        if: success() && inputs.dry_run != 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPOSITORY: ${{ github.repository }}
-          TRIGGER_EVENT: ${{ github.event_name }}
-          VERSION_TYPE: ${{ env.VERSION_TYPE }}
+      - name: Release Information
         run: |
-          # Record release event for metrics
-          mkdir -p metrics
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          RELEASE_DATA=$(cat <<EOF
-          {
-            "timestamp": "$TIMESTAMP",
-            "event_type": "release_created",
-            "trigger": "$TRIGGER_EVENT",
-            "version_type": "$VERSION_TYPE",
-            "repository": "$REPOSITORY"
-          }
-          EOF
-          )
-          echo "$RELEASE_DATA" >> metrics/release_events.jsonl
-          echo "📊 Release metrics recorded"
+          TRIGGER_EVENT="${{ github.event_name == 'workflow_dispatch' && 'Manual' || 'Dependabot' }}"
+          VERSION_TYPE="${{ inputs.version_type || 'patch' }}"
+          echo "🎯 Release Trigger: $TRIGGER_EVENT"
+          echo "📦 Version Type: $VERSION_TYPE"
 
       - name: Release Summary
         if: success()
@@ -104,7 +87,7 @@ jobs:
             LATEST_RELEASE=$(git tag -l "v*" --sort=-version:refname | head -1)
             TRIGGER_DISPLAY="${{ github.event_name == 'workflow_dispatch' && '🖱️ Manual' || '🤖 Dependabot' }}"
             {
-              echo "## 🎉 Smart Release Complete"
+              echo "## 🎉 Release Complete"
               echo ""
               echo "**✅ Successfully created release:** $LATEST_RELEASE"
               echo "**🔍 Trigger Type:** $TRIGGER_DISPLAY"
@@ -114,7 +97,7 @@ jobs:
               echo "### 🔗 Quick Links"
               echo "- [📋 View Release](https://github.com/${{ github.repository }}/releases/tag/$LATEST_RELEASE)"
               echo "- [🏠 Repository](https://github.com/${{ github.repository }})"
-              echo "- [📊 Metrics Dashboard](https://github.com/${{ github.repository }}/blob/main/dashboard/index.html)"
+              echo "- [📊 Repository Insights](https://github.com/${{ github.repository }}/pulse)"
               echo ""
               echo "### 🚀 Next Steps"
               echo "The release is now live and ready for use. Update your workflows with:"
@@ -123,4 +106,4 @@ jobs:
               echo "\`\`\`"
             } >> $GITHUB_STEP_SUMMARY
           fi
-          echo "🎯 Release workflow completed successfully!"
+          echo "🎯 Release automation completed successfully!"

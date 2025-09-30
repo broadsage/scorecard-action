@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smart Release Manager - Unified release automation for dependency updates and manual releases.
+Release Manager - Unified release automation for dependency updates and manual releases.
 Handles both Dependabot PR processing and manual GitHub release creation with context awareness.
 """
 
@@ -37,8 +37,8 @@ class ReleaseConfig:
     pr_title: Optional[str] = None
 
 
-class SmartReleaseManager:
-    """Smart release manager with context-aware processing for dependency updates and manual releases."""
+class ReleaseManager:
+    """Automated release manager with context-aware processing for dependency updates and manual releases."""
     
     def __init__(self):
         """Initialize the release manager with environment validation and context detection."""
@@ -416,7 +416,7 @@ uses: broadsage/scorecard-action@v1
         
     def main(self) -> None:
         """
-        Main workflow for smart release processing with context awareness.
+        Main workflow for automated release processing with context awareness.
         """
         context_name = "🤖 Dependabot" if self.config.context == ReleaseContext.DEPENDABOT else "🖱️ Manual"
         action_type = "DRY RUN" if self.config.dry_run else "RELEASE"
@@ -458,5 +458,5 @@ uses: broadsage/scorecard-action@v1
 
 if __name__ == "__main__":
     # Environment-based execution (no CLI args needed)
-    manager = SmartReleaseManager()
+    manager = ReleaseManager()
     manager.main()
