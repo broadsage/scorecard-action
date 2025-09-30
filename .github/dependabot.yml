@@ -1,43 +1,49 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 Broadsage Corporation <containers@broadsage.com>
+# SPDX-FileCopyrightText: Copyright (c) 2025 Broadsage <opensource@broadsage.com>
 #
 # SPDX-License-Identifier: Apache-2.0
 
+---
 version: 2
+
 updates:
+  # Configuration for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
-      time: "09:00"
-    open-pull-requests-limit: 15
+      interval: "weekly"
     target-branch: "main"
-    
-    groups:
-      security-patches:
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-      
-      minor-updates:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-      
-      major-updates:
-        patterns:
-          - "*"
-        update-types:
-          - "major"
-    
-    pull-request-branch-name:
-      separator: "/"
-    
+
+    # Configure commit messages to follow conventional commit format
     commit-message:
       prefix: "chore"
       prefix-development: "deps"
       include: "scope"
-    
+
+    # Configure the format of pull request branch names
+    pull-request-branch-name:
+      # Use hyphens as separators in branch names
+      separator: "-"
+
+    # Automatically add these labels to created pull requests
     labels:
       - "dependencies"
+      - "actions"
+
+      # Group definitions for related dependencies
+    groups:
+      # Group for version control system related dependencies
+      actions-dependencies:
+        patterns:
+          - "*"
+        # Only group minor and patch updates
+        update-types:
+          - "minor"
+          - "patch"
+
+    # Separate major updates from groups
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+    # Limit the number of open pull requests Dependabot can have at one time
+    open-pull-requests-limit: 4
