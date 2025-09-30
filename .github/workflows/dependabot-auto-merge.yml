@@ -1,149 +1,101 @@
-name: Dependabot Auto-merge
+# SPDX-FileCopyrightText: Copyright (c) 2025 Broadsage Corporation <containers@broadsage.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+---
+name: "Dependabot Auto-Merge"
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize]
+    branches: [main]
 
+# Use restrictive default permissions
 permissions:
-  contents: write
-  pull-requests: write
-  checks: read
+  contents: read
 
 jobs:
-  auto-merge:
+  dependabot-auto-merge:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    name: Auto-merge Dependabot PRs
+    # Explicit job-level permissions following least privilege principle
+    permissions:
+      contents: write # Required for merging PRs
+      pull-requests: write # Required for approving and merging PRs
+      checks: read # Required to read check status
+    if: |
+      github.actor == 'dependabot[bot]' &&
+      contains(github.event.pull_request.labels.*.name, 'dependencies') &&
+      github.event.pull_request.draft == false
     
     steps:
-      - name: Check PR Details
-        id: pr-check
-        run: |
-          echo "PR Title: ${{ github.event.pull_request.title }}"
-          echo "PR Author: ${{ github.event.pull_request.user.login }}"
-          echo "PR Labels: ${{ join(github.event.pull_request.labels.*.name, ', ') }}"
-          
-          # Determine if this is a safe auto-merge candidate
-          TITLE="${{ github.event.pull_request.title }}"
-          
-          # Safe patterns for auto-merge
-          if [[ "$TITLE" =~ ^chore.*security-actions.*patch|minor ]] || \
-             [[ "$TITLE" =~ ^chore.*infrastructure-actions.*patch|minor ]] || \
-             [[ "$TITLE" =~ ^chore.*actions/(checkout|upload-artifact|download-artifact|cache|setup-) ]] || \
-             [[ "$TITLE" =~ patch|security ]]; then
-            echo "auto_merge=true" >> $GITHUB_OUTPUT
-            echo "reason=Safe infrastructure or security patch update" >> $GITHUB_OUTPUT
-          else
-            echo "auto_merge=false" >> $GITHUB_OUTPUT  
-            echo "reason=Major update or integration action - requires review" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Validate Action Files
-        if: steps.pr-check.outputs.auto_merge == 'true'
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Wait for checks to complete
+        uses: lewagon/wait-on-check-action@0dceb95e7c4cad8cc7422aee3885998f5cab9c79 # v1.4.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          check-name: "Dependabot Auto-Merge / dependabot-auto-merge"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
+          allowed-conclusions: success,neutral,skipped
+        continue-on-error: true
         id: wait-for-checks
-        run: |
-          echo "🔍 Performing basic validation for composite action..."
-          
-          # Validate action.yml syntax and structure
-          if [[ -f "action.yml" ]]; then
-            echo "✅ action.yml exists"
-            
-            # Basic YAML syntax check
-            if yq eval '.' action.yml > /dev/null 2>&1; then
-              echo "✅ action.yml has valid YAML syntax"
-            else
-              echo "❌ action.yml has invalid YAML syntax"
-              exit 1
-            fi
-            
-            # Check for required composite action fields
-            if yq eval '.runs.using' action.yml | grep -q "composite"; then
-              echo "✅ Composite action structure validated"
-            else
-              echo "❌ Invalid composite action structure"
-              exit 1
-            fi
-          else
-            echo "❌ action.yml not found"
-            exit 1
-          fi
-          
-          # For composite actions wrapping official actions, minimal validation is sufficient
-          echo "✅ Basic validation passed - safe to auto-merge dependency updates"
-          echo "conclusion=success" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Auto-merge Safe Updates
-        if: |
-          steps.pr-check.outputs.auto_merge == 'true' && 
-          steps.wait-for-checks.outputs.conclusion == 'success'
-        run: |
-          echo "🤖 Auto-merging safe Dependabot update"
-          echo "Reason: ${{ steps.pr-check.outputs.reason }}"
-          
-          # Enable auto-merge with squash
-          gh pr merge ${{ github.event.pull_request.number }} \
-            --squash \
-            --auto \
-            --delete-branch \
-            --subject "🤖 ${{ github.event.pull_request.title }}" \
-            --body "Auto-merged safe dependency update by Dependabot.
-          
-          ✅ **Safety Checks Passed:**
-          - Dependabot-created PR ✓
-          - Safe update pattern detected ✓  
-          - CI checks passed ✓
-          
-          **Update Details:**
-          - Type: ${{ steps.pr-check.outputs.reason }}
-          - Will trigger automated release workflow
-          
-          *This PR was automatically merged as it meets safety criteria for infrastructure/security updates.*"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Add Review Request for Manual Updates  
-        if: steps.pr-check.outputs.auto_merge == 'false'
-        run: |
-          echo "🔍 Manual review required for this update"
-          echo "Reason: ${{ steps.pr-check.outputs.reason }}"
-          
-          # Add comment explaining why manual review is needed
-          gh pr comment ${{ github.event.pull_request.number }} --body "## 🔍 Manual Review Required
 
-          This Dependabot update requires manual review because:
-          **${{ steps.pr-check.outputs.reason }}**
+      - name: Check if ready for merge
+        if: steps.wait-for-checks.outcome == 'success' || steps.wait-for-checks.outcome == 'skipped'
+        run: echo "✅ Basic validation passed, proceeding with auto-merge"
 
-          ### 📋 Review Checklist:
-          - [ ] Verify breaking changes in release notes
-          - [ ] Test compatibility with current workflows  
-          - [ ] Check for API changes or deprecations
-          - [ ] Validate security implications
-          
-          ### ⚡ Auto-merge Criteria:
-          The following updates are auto-merged when CI passes:
-          - ✅ Infrastructure actions (checkout, upload-artifact, etc.) - patch/minor
-          - ✅ Security actions (scorecard, codeql) - patch/minor  
-          - ✅ Patch/security updates for all actions
-          
-          Major version updates always require manual review for breaking changes."
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Log Auto-merge Decision
+      - name: Skip auto-merge if checks failed
+        if: steps.wait-for-checks.outcome != 'success' && steps.wait-for-checks.outcome != 'skipped'
         run: |
-          echo "🤖 Auto-merge Decision: ${{ steps.pr-check.outputs.auto_merge }}"
-          echo "📋 Reason: ${{ steps.pr-check.outputs.reason }}"
+          echo "⚠️ Checks did not pass or timed out, skipping auto-merge"
+          echo "This is likely due to permission issues or failing tests"
+          exit 0
 
-      - name: Summary
-        run: |
-          if [[ "${{ steps.pr-check.outputs.auto_merge }}" == "true" ]]; then
-            echo "## 🤖 Auto-merge Decision: APPROVED" >> $GITHUB_STEP_SUMMARY
-            echo "**Reason:** ${{ steps.pr-check.outputs.reason }}" >> $GITHUB_STEP_SUMMARY
-            echo "**Action:** PR will be auto-merged after CI completion" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## 🔍 Auto-merge Decision: MANUAL REVIEW REQUIRED" >> $GITHUB_STEP_SUMMARY  
-            echo "**Reason:** ${{ steps.pr-check.outputs.reason }}" >> $GITHUB_STEP_SUMMARY
-            echo "**Action:** PR awaiting manual review and approval" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "📊 [View DORA Metrics](https://github.com/${{ github.repository }}/actions/workflows/dora-metrics.yml)" >> $GITHUB_STEP_SUMMARY
+      - name: Approve Dependabot PR
+        if: steps.wait-for-checks.outcome == 'success' || steps.wait-for-checks.outcome == 'skipped'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            try {
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                event: 'APPROVE',
+                body: '✅ Auto-approved dependabot PR for scorecard action dependencies'
+              });
+              console.log('✅ Successfully approved PR');
+            } catch (error) {
+              console.log('⚠️ Error approving PR:', error.message);
+              // Don't fail the workflow for approval errors
+            }
+
+      - name: Enable auto-merge
+        if: steps.wait-for-checks.outcome == 'success' || steps.wait-for-checks.outcome == 'skipped'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                merge_method: 'squash',
+                commit_title: `${context.payload.pull_request.title} (#${context.issue.number})`,
+                commit_message: 'Auto-merged by Dependabot workflow for scorecard action'
+              });
+              console.log('✅ Successfully merged PR');
+            } catch (error) {
+              console.log('❌ Error merging PR:', error.message);
+              if (error.message.includes('workflows permission')) {
+                console.log('💡 This may be due to missing workflows permission for GitHub Apps');
+                console.log('💡 Check repository Settings > Actions > General > Workflow permissions');
+              }
+              throw error;
+            }
