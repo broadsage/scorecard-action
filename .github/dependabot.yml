@@ -14,7 +14,7 @@ updates:
     
     # Intelligent grouping strategy for different action types
     groups:
-      # 🔒 Critical Security Actions (High Priority)
+      # 🔒 Critical Security Actions (High Priority - Auto-merge patch/minor)
       security-actions:
         patterns:
           - "ossf/scorecard-action"
@@ -45,16 +45,28 @@ updates:
         update-types:
           - "minor"
           - "patch"
+      
+      # 💥 Major Version Updates (Careful Review Required)
+      major-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
     
-    # Commit message configuration
+    # Auto-merge configuration for safe updates
+    pull-request-branch-name:
+      separator: "/"
+    
+    # Commit message configuration with enhanced prefixes
     commit-message:
       prefix: "chore"
       prefix-development: "deps"
       include: "scope"
     
-    # Enhanced labeling for better categorization
+    # Enhanced labeling for better categorization and auto-merge detection
     labels:
       - "dependencies"
       - "github-actions"
       - "automated"
       - "security-update"
+      - "auto-merge-candidate"  # For workflow automation detection

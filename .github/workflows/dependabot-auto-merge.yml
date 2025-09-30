@@ -1,0 +1,120 @@
+name: Auto-merge Dependabot PRs
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    
+    steps:
+      - name: Check PR Details
+        id: pr-check
+        run: |
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "PR Author: ${{ github.event.pull_request.user.login }}"
+          echo "PR Labels: ${{ join(github.event.pull_request.labels.*.name, ', ') }}"
+          
+          # Determine if this is a safe auto-merge candidate
+          TITLE="${{ github.event.pull_request.title }}"
+          
+          # Safe patterns for auto-merge
+          if [[ "$TITLE" =~ ^chore.*security-actions.*patch|minor ]] || \
+             [[ "$TITLE" =~ ^chore.*infrastructure-actions.*patch|minor ]] || \
+             [[ "$TITLE" =~ ^chore.*actions/(checkout|upload-artifact|download-artifact|cache|setup-) ]] || \
+             [[ "$TITLE" =~ patch|security ]]; then
+            echo "auto_merge=true" >> $GITHUB_OUTPUT
+            echo "reason=Safe infrastructure or security patch update" >> $GITHUB_OUTPUT
+          else
+            echo "auto_merge=false" >> $GITHUB_OUTPUT  
+            echo "reason=Major update or integration action - requires review" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Wait for CI Checks
+        if: steps.pr-check.outputs.auto_merge == 'true'
+        uses: fountainhead/action-wait-for-check@v1.2.0
+        id: wait-for-checks
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "CI"
+          ref: ${{ github.event.pull_request.head.sha }}
+          timeoutSeconds: 600
+          intervalSeconds: 30
+        continue-on-error: true
+      
+      - name: Auto-merge Safe Updates
+        if: |
+          steps.pr-check.outputs.auto_merge == 'true' && 
+          (steps.wait-for-checks.outputs.conclusion == 'success' || 
+           steps.wait-for-checks.outcome == 'skipped')
+        run: |
+          echo "🤖 Auto-merging safe Dependabot update"
+          echo "Reason: ${{ steps.pr-check.outputs.reason }}"
+          
+          # Enable auto-merge with squash
+          gh pr merge ${{ github.event.pull_request.number }} \
+            --squash \
+            --auto \
+            --delete-branch \
+            --subject "🤖 ${{ github.event.pull_request.title }}" \
+            --body "Auto-merged safe dependency update by Dependabot.
+          
+          ✅ **Safety Checks Passed:**
+          - Dependabot-created PR ✓
+          - Safe update pattern detected ✓  
+          - CI checks passed ✓
+          
+          **Update Details:**
+          - Type: ${{ steps.pr-check.outputs.reason }}
+          - Will trigger automated release workflow
+          
+          *This PR was automatically merged as it meets safety criteria for infrastructure/security updates.*"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Add Review Request for Manual Updates  
+        if: steps.pr-check.outputs.auto_merge == 'false'
+        run: |
+          echo "🔍 Manual review required for this update"
+          echo "Reason: ${{ steps.pr-check.outputs.reason }}"
+          
+          # Add comment explaining why manual review is needed
+          gh pr comment ${{ github.event.pull_request.number }} --body "## 🔍 Manual Review Required
+
+          This Dependabot update requires manual review because:
+          **${{ steps.pr-check.outputs.reason }}**
+
+          ### 📋 Review Checklist:
+          - [ ] Verify breaking changes in release notes
+          - [ ] Test compatibility with current workflows  
+          - [ ] Check for API changes or deprecations
+          - [ ] Validate security implications
+          
+          ### ⚡ Auto-merge Criteria:
+          The following updates are auto-merged when CI passes:
+          - ✅ Infrastructure actions (checkout, upload-artifact, etc.) - patch/minor
+          - ✅ Security actions (scorecard, codeql) - patch/minor  
+          - ✅ Patch/security updates for all actions
+          
+          Major version updates always require manual review for breaking changes."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Summary
+        run: |
+          if [[ "${{ steps.pr-check.outputs.auto_merge }}" == "true" ]]; then
+            echo "## 🤖 Auto-merge Decision: APPROVED" >> $GITHUB_STEP_SUMMARY
+            echo "**Reason:** ${{ steps.pr-check.outputs.reason }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Action:** PR will be auto-merged after CI completion" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## 🔍 Auto-merge Decision: MANUAL REVIEW REQUIRED" >> $GITHUB_STEP_SUMMARY  
+            echo "**Reason:** ${{ steps.pr-check.outputs.reason }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Action:** PR awaiting manual review and approval" >> $GITHUB_STEP_SUMMARY
+          fi
