@@ -27,19 +27,27 @@ jobs:
           repo: ${{ github.repository }}
         continue-on-error: true
           
-      - name: Display Results
+      - name: Display Results  
         if: always()
         run: |
-          echo "📊 DORA Metrics Results"
-          echo "======================"
+          echo "📊 DORA Metrics Collection"
+          echo "========================="
           if [[ "${{ steps.dora.outcome }}" == "success" ]]; then
-            echo "📦 Deploy Frequency: ${{ steps.dora.outputs.deploy-frequency }} releases/week"
-            echo "⏱️ Lead Time: ${{ steps.dora.outputs.lead-time }} days"  
-            echo "🚨 Change Failure Rate: ${{ steps.dora.outputs.change-failure-rate }}%"
-            echo "🔧 Mean Time to Restore: ${{ steps.dora.outputs.mttr }} hours"
+            echo "✅ DORA metrics collection completed successfully"
+            echo "📈 Check the action logs above for detailed metrics"
+            echo "🔍 Metrics include: Deploy Frequency, Lead Time, Change Failure Rate, and MTTR"
             echo ""
-            echo "✅ Using proven marketplace action: stenjo/devops-metrics-action"
+            echo "📋 Using industry-standard marketplace action: stenjo/devops-metrics-action@v1"
+            echo "� Metrics are calculated based on releases, PRs, and issue data"
           else
-            echo "⚠️ Metrics collection failed or repository may not have enough data"
-            echo "💡 Ensure repository has releases, issues, and PRs for accurate DORA metrics"
+            echo "⚠️ Metrics collection encountered issues"
+            echo "� Possible reasons:"
+            echo "   - Repository may not have enough historical data"
+            echo "   - Insufficient releases, issues, or pull requests"
+            echo "   - Network or API rate limiting issues"
+            echo ""
+            echo "🔧 To improve metrics accuracy:"
+            echo "   - Ensure regular releases are created"
+            echo "   - Use issues to track bugs and incidents"  
+            echo "   - Maintain consistent PR workflow"
           fi
