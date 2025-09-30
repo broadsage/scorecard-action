@@ -67,7 +67,7 @@ jobs:
                 repo: context.repo.repo,
                 pull_number: context.issue.number,
                 event: 'APPROVE',
-                body: '✅ Auto-approved dependabot PR for scorecard action dependencies'
+                body: '✅ Auto-approved Dependabot PR for scorecard action\n\n**Rationale for Auto-merge:**\n- 🎯 Simple composite action wrapper with minimal risk\n- 🛡️ Dependabot provides thorough security scanning\n- ⚡ Faster security patching improves security posture\n- 📦 GitHub Actions are typically backward compatible\n- 🔍 Changes can be easily reverted if issues arise\n\n*This aligns with OpenSSF recommendations for rapid security updates.*'
               });
               console.log('✅ Successfully approved PR');
             } catch (error) {

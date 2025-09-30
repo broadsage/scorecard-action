@@ -1,72 +1,47 @@
-# Enhanced Dependabot configuration for intelligent GitHub Actions dependency management
-# Provides tiered update strategies based on action criticality and impact
+# SPDX-FileCopyrightText: Copyright (c) 2025 Broadsage Corporation <containers@broadsage.com>
+#
+# SPDX-License-Identifier: Apache-2.0
 
 version: 2
 updates:
-  # GitHub Actions dependency management with intelligent grouping
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday" 
+      interval: "daily"
       time: "09:00"
-    open-pull-requests-limit: 12
+    open-pull-requests-limit: 15
+    target-branch: "main"
     
-    # Intelligent grouping strategy for different action types
     groups:
-      # 🔒 Critical Security Actions (High Priority - Auto-merge patch/minor)
-      security-actions:
+      security-patches:
         patterns:
-          - "ossf/scorecard-action"
-          - "github/codeql-action/*"
-          - "step-security/*"
+          - "*"
         update-types:
-          - "minor"
           - "patch"
       
-      # 🏗️ Infrastructure Actions (Stable, Auto-mergeable)
-      infrastructure-actions:
+      minor-updates:
         patterns:
-          - "actions/checkout"
-          - "actions/upload-artifact"
-          - "actions/download-artifact"
-          - "actions/cache"
-          - "actions/setup-*"
+          - "*"
         update-types:
           - "minor"
-          - "patch"
       
-      # 🔗 Integration Actions (Review Required)
-      integration-actions:
-        patterns:
-          - "slackapi/slack-github-action"
-          - "*webhook*"
-          - "*notification*"
-        update-types:
-          - "minor"
-          - "patch"
-      
-      # 💥 Major Version Updates (Careful Review Required)
       major-updates:
         patterns:
           - "*"
         update-types:
           - "major"
     
-    # Auto-merge configuration for safe updates
     pull-request-branch-name:
       separator: "/"
     
-    # Commit message configuration with enhanced prefixes
     commit-message:
       prefix: "chore"
       prefix-development: "deps"
       include: "scope"
     
-    # Enhanced labeling for better categorization and auto-merge detection
     labels:
       - "dependencies"
       - "github-actions"
       - "automated"
-      - "security-update"
-      - "auto-merge-candidate"  # For workflow automation detection
+    
+    ignore: []
