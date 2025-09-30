@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ---
-name: "Force Dependabot Update Check"
+name: "Dependabot Force Update"
 
 on:
   workflow_dispatch:
