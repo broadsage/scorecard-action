@@ -98,7 +98,7 @@ runs:
   steps:
     - name: Run Official OpenSSF Scorecard Action
       id: scorecard-analysis
-      uses: ossf/scorecard-action@v2.4.2
+      uses: ossf/scorecard-action@v2.4.3
       with:
         results_file: ${{ inputs.results_file }}
         results_format: ${{ inputs.results_format }}
