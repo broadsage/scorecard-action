@@ -94,6 +94,22 @@ class ReleaseManager:
             sys.exit(1)
             
         print("✅ Environment validation passed")
+    
+    def _generate_usage_block(self) -> str:
+        """Generate common usage block for release notes."""
+        return """---
+
+### 🚀 Usage
+Update your workflows to use the latest version:
+```yaml
+uses: broadsage/scorecard-action@v1
+```"""
+    
+    def _generate_footer(self, context: ReleaseContext) -> str:
+        """Generate common footer for release notes."""
+        if context == ReleaseContext.DEPENDABOT:
+            return "*This release was automatically created by our dependency management system.*"
+        return "*This release was manually created via GitHub Actions workflow.*"
         
     def _run_command(self, command: list, check: bool = True) -> subprocess.CompletedProcess:
         """Run a command and return the result."""
@@ -218,7 +234,7 @@ This release updates the following dependency:
         }
         category_icon = category_icons.get(action_name, "📦")
         
-        return f"""## {category_icon} Dependency Update: {action_name}
+        return f"""## {category_icon} Dependency Update
 
 ### 🚀 What's Updated
 - **{action_name}**: `{old_version}` → `{new_version}`
@@ -231,33 +247,21 @@ This release updates the following dependency:
 - All tests passing ✅
 - Security and compatibility verified
 
----
+{self._generate_usage_block()}
 
-### 🚀 Usage
-Update your workflows to use the latest version:
-```yaml
-uses: broadsage/scorecard-action@v1
-```
-
-*This release was automatically created by our dependency management system.*"""
+{self._generate_footer(ReleaseContext.DEPENDABOT)}"""
 
     def _generate_manual_notes(self, version: str, **kwargs) -> str:
         """Generate release notes for manual releases."""
         if self.config.custom_notes:
             # Use custom notes provided by user
-            return f"""## 🚀 Release {version}
+            return f"""## 🚀 What's New
 
 {self.config.custom_notes}
 
----
+{self._generate_usage_block()}
 
-### 🚀 Usage
-Update your workflows to use the latest version:
-```yaml
-uses: broadsage/scorecard-action@v1
-```
-
-*This release was manually created via GitHub Actions workflow.*"""
+{self._generate_footer(ReleaseContext.MANUAL)}"""
         else:
             # Generate automatic notes from commits
             return self._generate_automatic_notes(version)
@@ -279,40 +283,28 @@ uses: broadsage/scorecard-action@v1
             version_icon = "🎯" if self.config.version_type == VersionType.PATCH else \
                           "🚀" if self.config.version_type == VersionType.MINOR else "💥"
                           
-            return f"""## {version_icon} Release {version}
+            return f"""## {version_icon} What's Changed
 
-### 📝 What's Changed
+### 📝 Changes in This Release
 {commit_list}
 
 ### 🔧 Release Information
 - **Version Type**: {self.config.version_type.value.title()}
 - **Release Method**: Manual via GitHub Actions
 
----
+{self._generate_usage_block()}
 
-### 🚀 Usage
-Update your workflows to use the latest version:
-```yaml
-uses: broadsage/scorecard-action@v1
-```
-
-*This release was manually created via GitHub Actions workflow.*"""
+{self._generate_footer(ReleaseContext.MANUAL)}"""
         except Exception as e:
             print(f"⚠️ Failed to generate automatic notes: {e}", file=sys.stderr)
-            return f"""## 🚀 Release {version}
+            return f"""## 🚀 What's Changed
 
-### 📝 What's Changed
+### 📝 Updates
 - Various improvements and updates
 
----
+{self._generate_usage_block()}
 
-### 🚀 Usage
-Update your workflows to use the latest version:
-```yaml
-uses: broadsage/scorecard-action@v1
-```
-
-*This release was manually created via GitHub Actions workflow.*"""
+{self._generate_footer(ReleaseContext.MANUAL)}"""
 
     def _get_last_version(self) -> str:
         """Get the last version tag for commit comparison."""
@@ -394,14 +386,8 @@ uses: broadsage/scorecard-action@v1
         else:
             commit_msg = f"release: {version}"
             
-        # Create and push version tag
-        self._run_command(['git', 'tag', '-a', version, '-m', commit_msg])
-        self._run_command(['git', 'push', 'origin', version])
-        
-        # Update major version tag for GitHub Actions best practice
-        major_version = version.split('.')[0]  # e.g., "v1" from "v1.0.2"
-        self._run_command(['git', 'tag', '-f', major_version, version])
-        self._run_command(['git', 'push', 'origin', major_version, '--force'])
+        # Create and push tags
+        self._create_and_push_tags(version, commit_msg)
         
         # Create GitHub release
         self._run_command([
@@ -413,6 +399,17 @@ uses: broadsage/scorecard-action@v1
         
         print(f"✅ Successfully created release {version}")
         return version
+    
+    def _create_and_push_tags(self, version: str, commit_msg: str) -> None:
+        """Create and push version and major tags."""
+        # Create and push version tag
+        self._run_command(['git', 'tag', '-a', version, '-m', commit_msg])
+        self._run_command(['git', 'push', 'origin', version])
+        
+        # Update major version tag for GitHub Actions best practice
+        major_version = version.split('.')[0]  # e.g., "v1" from "v1.0.2"
+        self._run_command(['git', 'tag', '-f', major_version, version])
+        self._run_command(['git', 'push', 'origin', major_version, '--force'])
         
     def main(self) -> None:
         """
