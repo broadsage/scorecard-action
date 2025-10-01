@@ -99,7 +99,7 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --verbose --tag ${{ steps.version.outputs.new_version }}
+          args: --verbose --tag ${{ steps.version.outputs.new_version }} --strip header
         env:
           OUTPUT: CHANGELOG.md
 
@@ -109,6 +109,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEW_VERSION: ${{ steps.version.outputs.new_version }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
+          CHANGELOG: ${{ steps.changelog.outputs.content }}
         run: |
           # Create version tag
           git tag -a "$NEW_VERSION" -m "chore: release $NEW_VERSION"
@@ -137,7 +138,7 @@ jobs:
           *This release was manually created via GitHub Actions workflow.*"
           else
             # Use git-cliff generated changelog
-            FINAL_NOTES=$(git cliff --tag "$NEW_VERSION" --strip header)
+            FINAL_NOTES="$CHANGELOG"
           fi
           
           # Create GitHub release
@@ -148,6 +149,8 @@ jobs:
           
       - name: Dry Run Summary
         if: ${{ inputs.dry_run == true }}
+        env:
+          CHANGELOG: ${{ steps.changelog.outputs.content }}
         run: |
           echo "## 🧪 Dry Run Complete" >> $GITHUB_STEP_SUMMARY
           echo "**✅ Validation successful - no release created**" >> $GITHUB_STEP_SUMMARY
@@ -157,7 +160,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📋 Generated Changelog Preview" >> $GITHUB_STEP_SUMMARY
           echo '```markdown' >> $GITHUB_STEP_SUMMARY
-          git cliff --tag "${{ steps.version.outputs.new_version }}" --strip header | head -20 >> $GITHUB_STEP_SUMMARY
+          echo "$CHANGELOG" | head -20 >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Release Summary
