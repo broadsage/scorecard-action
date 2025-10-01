@@ -19,12 +19,19 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         
+      - name: Debug Repository Context
+        run: |
+          echo "🔍 Repository Debug Information"
+          echo "github.repository: ${{ github.repository }}"
+          echo "github.repository_owner: ${{ github.repository_owner }}"
+          echo "Expected format: owner/repo"
+          
       - name: DevOps Metrics from GitHub
         id: dora  
         uses: stenjo/devops-metrics-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          repo: ${{ github.repository }}
+          repo: broadsage/scorecard-action
         continue-on-error: true
           
       - name: Display Results  
@@ -38,16 +45,24 @@ jobs:
             echo "🔍 Metrics include: Deploy Frequency, Lead Time, Change Failure Rate, and MTTR"
             echo ""
             echo "📋 Using industry-standard marketplace action: stenjo/devops-metrics-action@v1"
-            echo "� Metrics are calculated based on releases, PRs, and issue data"
+            echo "📊 Metrics are calculated based on releases, PRs, and issue data"
           else
             echo "⚠️ Metrics collection encountered issues"
-            echo "� Possible reasons:"
+            echo "🔧 Possible reasons:"
+            echo "   - Repository format issue (fixed: hardcoded broadsage/scorecard-action)"
             echo "   - Repository may not have enough historical data"
-            echo "   - Insufficient releases, issues, or pull requests"
+            echo "   - Insufficient releases, issues, or pull requests" 
             echo "   - Network or API rate limiting issues"
+            echo "   - Action may have bugs with repository parsing"
             echo ""
-            echo "🔧 To improve metrics accuracy:"
-            echo "   - Ensure regular releases are created"
-            echo "   - Use issues to track bugs and incidents"  
+            echo "� Troubleshooting steps applied:"
+            echo "   - Hardcoded repository name to avoid parsing issues"
+            echo "   - Added debug output for repository context"
+            echo "   - Used continue-on-error to prevent workflow failure"
+            echo ""
+            echo "�🔧 To improve metrics accuracy:"
+            echo "   - Ensure regular releases are created" 
+            echo "   - Use issues to track bugs and incidents"
             echo "   - Maintain consistent PR workflow"
+            echo "   - Consider alternative DORA metrics solutions if issues persist"
           fi
