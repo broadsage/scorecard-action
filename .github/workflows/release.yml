@@ -30,8 +30,12 @@ jobs:
     if: |
       (github.event_name == 'pull_request' && 
        github.event.pull_request.merged == true && 
-       github.event.pull_request.user.login == 'dependabot[bot]' &&
-       contains(github.event.pull_request.labels.*.name, 'dependencies')) ||
+       (github.event.pull_request.user.login == 'dependabot[bot]' ||
+        contains(github.event.pull_request.labels.*.name, 'release') ||
+        contains(github.event.pull_request.title, 'feat') ||
+        contains(github.event.pull_request.title, 'fix') ||
+        contains(github.event.pull_request.title, 'chore') ||
+        github.event.pull_request.base.ref == 'main')) ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
