@@ -9,9 +9,10 @@ import sys
 import re
 import json
 import subprocess
-from typing import Optional, Tuple, Dict, Literal
+from typing import Optional, Tuple, Dict, List, Literal
 from dataclasses import dataclass
 from enum import Enum
+from collections import defaultdict
 
 
 class ReleaseContext(Enum):
@@ -26,6 +27,16 @@ class VersionType(Enum):
     MINOR = "minor" 
     PATCH = "patch"
 
+
+@dataclass
+class CommitInfo:
+    """Information about a single commit."""
+    type: str  # feat, fix, docs, etc.
+    scope: Optional[str]  # Optional scope like (deps), (ui), etc.
+    description: str
+    body: Optional[str]
+    breaking: bool = False
+    hash: str = ""
 
 @dataclass
 class ReleaseConfig:
@@ -110,6 +121,89 @@ uses: broadsage/scorecard-action@v1
         if context == ReleaseContext.DEPENDABOT:
             return "*This release was automatically created by our dependency management system.*"
         return "*This release was manually created via GitHub Actions workflow.*"
+    
+    def _parse_conventional_commit(self, commit_msg: str, commit_hash: str = "") -> Optional[CommitInfo]:
+        """
+        Parse conventional commit message.
+        
+        Format: type(scope)!: description
+        Examples:
+        - feat: add new feature
+        - fix(deps): resolve dependency issue  
+        - feat!: breaking change
+        - docs(readme): update installation guide
+        """
+        # Regex pattern for conventional commits
+        pattern = r'^(?P<type>feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(?:\((?P<scope>[^)]+)\))?(?P<breaking>!)?: (?P<description>.+)$'
+        
+        match = re.match(pattern, commit_msg.strip())
+        if not match:
+            # Try to categorize non-conventional commits
+            commit_lower = commit_msg.lower().strip()
+            if any(word in commit_lower for word in ['fix', 'bug', 'resolve', 'patch']):
+                commit_type = 'fix'
+            elif any(word in commit_lower for word in ['add', 'new', 'feature', 'implement']):
+                commit_type = 'feat'
+            elif any(word in commit_lower for word in ['update', 'upgrade', 'bump']):
+                commit_type = 'chore'
+            elif any(word in commit_lower for word in ['refactor', 'clean', 'reorganize']):
+                commit_type = 'refactor'
+            elif any(word in commit_lower for word in ['doc', 'readme', 'comment']):
+                commit_type = 'docs'
+            else:
+                commit_type = 'chore'
+                
+            return CommitInfo(
+                type=commit_type,
+                scope=None,
+                description=commit_msg.strip(),
+                body=None,
+                breaking=False,
+                hash=commit_hash
+            )
+        
+        return CommitInfo(
+            type=match.group('type'),
+            scope=match.group('scope'),
+            description=match.group('description'),
+            body=None,
+            breaking=bool(match.group('breaking')),
+            hash=commit_hash
+        )
+    
+    def _analyze_commits_for_version_bump(self, commits: List[CommitInfo]) -> VersionType:
+        """Analyze commits to determine appropriate version bump."""
+        has_breaking = any(commit.breaking for commit in commits)
+        has_features = any(commit.type == 'feat' for commit in commits)
+        
+        if has_breaking:
+            return VersionType.MAJOR
+        elif has_features:
+            return VersionType.MINOR
+        else:
+            return VersionType.PATCH
+    
+    def _get_commits_since_last_release(self) -> List[CommitInfo]:
+        """Get and parse commits since last release."""
+        try:
+            result = self._run_command([
+                'git', 'log', '--oneline', '--pretty=format:%H|%s', 
+                f'{self._get_last_version()}..HEAD'
+            ], check=False)
+            
+            commits = []
+            if result.returncode == 0 and result.stdout.strip():
+                for line in result.stdout.strip().split('\n'):
+                    if '|' in line:
+                        hash_part, msg = line.split('|', 1)
+                        commit_info = self._parse_conventional_commit(msg, hash_part[:7])
+                        if commit_info:
+                            commits.append(commit_info)
+            
+            return commits
+        except Exception as e:
+            print(f"⚠️ Failed to analyze commits: {e}", file=sys.stderr)
+            return []
         
     def _run_command(self, command: list, check: bool = True) -> subprocess.CompletedProcess:
         """Run a command and return the result."""
@@ -267,39 +361,152 @@ This release updates the following dependency:
             return self._generate_automatic_notes(version)
     
     def _generate_automatic_notes(self, version: str) -> str:
-        """Generate automatic release notes from recent commits."""
+        """Generate semantic release notes from recent commits."""
         try:
-            # Get commits since last release
-            result = self._run_command([
-                'git', 'log', '--oneline', '--pretty=format:- %s', 
-                f'{self._get_last_version()}..HEAD'
-            ], check=False)
+            commits = self._get_commits_since_last_release()
             
-            if result.returncode == 0 and result.stdout.strip():
-                commit_list = result.stdout.strip()
-            else:
-                commit_list = "- Various improvements and bug fixes"
-                
-            version_icon = "🎯" if self.config.version_type == VersionType.PATCH else \
-                          "🚀" if self.config.version_type == VersionType.MINOR else "💥"
-                          
-            return f"""## {version_icon} What's Changed
+            if not commits:
+                return f"""## 🚀 What's Changed
 
-### 📝 Changes in This Release
-{commit_list}
-
-### 🔧 Release Information
-- **Version Type**: {self.config.version_type.value.title()}
-- **Release Method**: Manual via GitHub Actions
+### 📝 Updates
+- Various improvements and updates
 
 {self._generate_usage_block()}
 
 {self._generate_footer(ReleaseContext.MANUAL)}"""
+            
+            # Auto-detect version type based on commits
+            suggested_version_type = self._analyze_commits_for_version_bump(commits)
+            
+            # Group commits by type
+            grouped_commits = defaultdict(list)
+            for commit in commits:
+                grouped_commits[commit.type].append(commit)
+            
+            # Determine header icon based on changes
+            has_breaking = any(commit.breaking for commit in commits)
+            has_features = any(commit.type == 'feat' for commit in commits)
+            
+            if has_breaking:
+                version_icon = "💥"
+                header = "What's Changed"
+            elif has_features:
+                version_icon = "🚀"  
+                header = "What's Changed"
+            else:
+                version_icon = "🎯"
+                header = "What's Changed"
+                
+            # Build sections
+            sections = []
+            
+            # Breaking changes first
+            breaking_commits = [c for c in commits if c.breaking]
+            if breaking_commits:
+                sections.append("### 💥 Breaking Changes")
+                for commit in breaking_commits:
+                    scope_text = f"**{commit.scope}**: " if commit.scope else ""
+                    sections.append(f"- {scope_text}{commit.description}")
+                sections.append("")
+            
+            # Features
+            if 'feat' in grouped_commits:
+                sections.append("### ✨ New Features") 
+                for commit in grouped_commits['feat']:
+                    if not commit.breaking:  # Non-breaking features
+                        scope_text = f"**{commit.scope}**: " if commit.scope else ""
+                        sections.append(f"- {scope_text}{commit.description}")
+                sections.append("")
+            
+            # Bug fixes
+            if 'fix' in grouped_commits:
+                sections.append("### 🐛 Bug Fixes")
+                for commit in grouped_commits['fix']:
+                    scope_text = f"**{commit.scope}**: " if commit.scope else ""
+                    sections.append(f"- {scope_text}{commit.description}")
+                sections.append("")
+            
+            # Performance improvements
+            if 'perf' in grouped_commits:
+                sections.append("### ⚡ Performance Improvements")
+                for commit in grouped_commits['perf']:
+                    scope_text = f"**{commit.scope}**: " if commit.scope else ""
+                    sections.append(f"- {scope_text}{commit.description}")
+                sections.append("")
+            
+            # Documentation
+            if 'docs' in grouped_commits:
+                sections.append("### 📚 Documentation")
+                for commit in grouped_commits['docs']:
+                    scope_text = f"**{commit.scope}**: " if commit.scope else ""
+                    sections.append(f"- {scope_text}{commit.description}")
+                sections.append("")
+            
+            # Refactoring and maintenance
+            maintenance_types = ['refactor', 'chore', 'ci', 'build', 'style', 'test']
+            maintenance_commits = []
+            for commit_type in maintenance_types:
+                if commit_type in grouped_commits:
+                    maintenance_commits.extend(grouped_commits[commit_type])
+            
+            if maintenance_commits:
+                sections.append("### � Maintenance")
+                for commit in maintenance_commits:
+                    scope_text = f"**{commit.scope}**: " if commit.scope else ""
+                    type_emoji = {
+                        'refactor': '♻️',
+                        'chore': '🧹', 
+                        'ci': '👷',
+                        'build': '📦',
+                        'style': '💄',
+                        'test': '✅'
+                    }.get(commit.type, '🔧')
+                    sections.append(f"- {type_emoji} {scope_text}{commit.description}")
+                sections.append("")
+            
+            # Statistics
+            stats = []
+            if breaking_commits:
+                stats.append(f"**Breaking Changes**: {len(breaking_commits)}")
+            if 'feat' in grouped_commits:
+                feat_count = len([c for c in grouped_commits['feat'] if not c.breaking])
+                if feat_count > 0:
+                    stats.append(f"**New Features**: {feat_count}")
+            if 'fix' in grouped_commits:
+                stats.append(f"**Bug Fixes**: {len(grouped_commits['fix'])}")
+            if maintenance_commits:
+                stats.append(f"**Maintenance**: {len(maintenance_commits)}")
+            
+            stats.append(f"**Total Changes**: {len(commits)} commits")
+            
+            if stats:
+                sections.append("### � Release Statistics")
+                sections.extend([f"- {stat}" for stat in stats])
+                sections.append("")
+            
+            # Version recommendation
+            if suggested_version_type != self.config.version_type:
+                sections.append("### 💡 Version Recommendation")
+                sections.append(f"- **Detected**: {suggested_version_type.value.title()} version recommended based on changes")
+                sections.append(f"- **Configured**: {self.config.version_type.value.title()} version will be created")
+                if has_breaking:
+                    sections.append("- **⚠️ Note**: Breaking changes detected - consider major version bump")
+                sections.append("")
+            
+            content = "\n".join(sections)
+            
+            return f"""## {version_icon} {header}
+
+{content}
+{self._generate_usage_block()}
+
+{self._generate_footer(ReleaseContext.MANUAL)}"""
+            
         except Exception as e:
-            print(f"⚠️ Failed to generate automatic notes: {e}", file=sys.stderr)
+            print(f"⚠️ Failed to generate semantic notes: {e}", file=sys.stderr)
             return f"""## 🚀 What's Changed
 
-### 📝 Updates
+### 📝 Updates  
 - Various improvements and updates
 
 {self._generate_usage_block()}
