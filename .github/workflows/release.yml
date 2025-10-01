@@ -94,14 +94,12 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "📦 Version: $LATEST_TAG → $NEW_VERSION ($VERSION_TYPE)"
 
-      - name: Generate Changelog
+      - name: Generate Release Notes
         id: changelog
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --verbose --tag ${{ steps.version.outputs.new_version }} --strip header
-        env:
-          OUTPUT: CHANGELOG.md
+          args: --verbose --tag ${{ steps.version.outputs.new_version }} --from-tag ${{ steps.version.outputs.previous_version }} --strip header --strip footer
 
       - name: Process Release
         if: ${{ inputs.dry_run != true }}
