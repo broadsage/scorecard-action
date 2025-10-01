@@ -406,7 +406,7 @@ uses: broadsage/scorecard-action@v1
         # Create GitHub release
         self._run_command([
             'gh', 'release', 'create', version,
-            '--title', f'Release {version}',
+            '--title', version,
             '--notes', release_notes,
             '--latest'
         ])
