@@ -1,4 +1,4 @@
-name: Release Automation
+name: Release with GoReleaser
 
 on:
   workflow_dispatch:
@@ -12,21 +12,37 @@ on:
           - patch
           - minor
           - major
+          - prerelease
+      dry_run:
+        description: 'Run in dry-run mode (no actual release)'
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - "v*.*.*"
 
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
 jobs:
-  generate-changelog:
-    name: Generate changelog
+  release:
+    name: GoReleaser Release
     runs-on: ubuntu-latest
     outputs:
-      release_body: ${{ steps.git-cliff.outputs.content }}
-      release_version: ${{ steps.version.outputs.new_version }}
-      is_prerelease: ${{ contains(github.ref, '-') || contains(steps.version.outputs.new_version, '-') }}
+      release_version: ${{ steps.version.outputs.version }}
+      release_url: ${{ steps.goreleaser.outputs.release_url }}
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -36,7 +52,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Calculate Next Version
+      - name: Calculate Version (Manual Trigger)
         id: version
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -58,7 +74,7 @@ jobs:
           fi
           
           # Calculate new version based on input
-          VERSION_TYPE="${{ inputs.version_type || 'patch' }}"
+          VERSION_TYPE="${{ inputs.version_type }}"
           case $VERSION_TYPE in
             major)
               NEW_VERSION="v$((MAJOR + 1)).0.0"
@@ -69,154 +85,163 @@ jobs:
             patch)
               NEW_VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
               ;;
+            prerelease)
+              NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}-rc.$(date +%Y%m%d%H%M%S)"
+              ;;
           esac
           
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "previous_version=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "📦 Version: $LATEST_TAG → $NEW_VERSION ($VERSION_TYPE)"
+          
+          # Create tag if not dry run
+          if [[ "${{ inputs.dry_run }}" != "true" ]]; then
+            git tag "$NEW_VERSION"
+            git push origin "$NEW_VERSION"
+          fi
 
-      - name: Set Release Version from Tag
+      - name: Extract Version from Tag (Push Trigger)
         id: tag_version
         if: github.event_name == 'push'
         run: |
           NEW_VERSION=${GITHUB_REF#refs/tags/}
-          # Get previous version for changelog range
-          LATEST_TAG=$(git tag -l "v*" --sort=-version:refname | grep -v "^${NEW_VERSION}$" | head -1)
-          if [[ -z "$LATEST_TAG" ]]; then
-            LATEST_TAG="v0.0.0"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Tagged Release: $NEW_VERSION"
+
+      # Install git-cliff for changelog generation
+      - name: Install git-cliff
+        uses: orhun/git-cliff-action@14bb67385aaac969efa2f146d137a42bb3b0aa87 # v4
+
+      - name: Check typos
+        uses: crate-ci/typos@d7e6241ebf2f59df88a9e53567d2fdc5141c2fd1 # master
+
+      - name: Validate Action
+        run: |
+          echo "🔍 Validating GitHub Action configuration..."
+          
+          # Basic YAML syntax validation
+          if ! python3 -c "import yaml; yaml.safe_load(open('action.yml'))"; then
+            echo "❌ action.yml has invalid YAML syntax"
+            exit 1
           fi
           
-          echo "previous_version=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "📦 Tagged Release: $LATEST_TAG → $NEW_VERSION"
-
-      - name: Check typos
-        uses: crate-ci/typos@d7e6241ebf2f59df88a9e53567d2fdc5141c2fd1 # master
-
-      - name: Generate changelog
-        uses: orhun/git-cliff-action@v4
-        id: git-cliff
-        with:
-          config: cliff.toml
-          args: -vv --latest --no-exec --github-repo ${{ github.repository }}
-        env:
-          OUTPUT: CHANGELOG.md
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  create-release:
-    name: Create Release
-    needs: generate-changelog
-    runs-on: ubuntu-latest
-    if: always() && (needs.generate-changelog.result == 'success')
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Create Version Tag
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          NEW_VERSION: ${{ needs.generate-changelog.outputs.release_version }}
-        run: |
-          # Create version tag
-          git tag -a "$NEW_VERSION" -m "chore: release $NEW_VERSION"
-          git push origin "$NEW_VERSION"
+          # Check required action fields
+          if ! yq eval '.name' action.yml >/dev/null 2>&1; then
+            echo "❌ action.yml missing 'name' field"
+            exit 1
+          fi
           
-          # Create and push major version tag (GitHub Actions best practice)
-          MAJOR_VERSION=$(echo "$NEW_VERSION" | cut -d. -f1)
-          git tag -f "$MAJOR_VERSION" "$NEW_VERSION"
-          git push origin "$MAJOR_VERSION" --force
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.generate-changelog.outputs.release_version || github.ref_name }}
-          name: ${{ needs.generate-changelog.outputs.release_version || github.ref_name }}
-          body: ${{ needs.generate-changelog.outputs.release_body }}
-          prerelease: ${{ needs.generate-changelog.outputs.is_prerelease == 'true' }}
-          make_latest: ${{ needs.generate-changelog.outputs.is_prerelease != 'true' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  update-changelog:
-    name: Update CHANGELOG.md
-    needs: [generate-changelog, create-release]
-    runs-on: ubuntu-latest
-    if: always() && (needs.create-release.result == 'success') && github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          if ! yq eval '.description' action.yml >/dev/null 2>&1; then
+            echo "❌ action.yml missing 'description' field"
+            exit 1
+          fi
           
-      - name: Check typos
-        uses: crate-ci/typos@d7e6241ebf2f59df88a9e53567d2fdc5141c2fd1 # master
+          if ! yq eval '.runs' action.yml >/dev/null 2>&1; then
+            echo "❌ action.yml missing 'runs' field"
+            exit 1
+          fi
+          
+          echo "✅ Action validation passed"
 
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Update CHANGELOG.md
-        uses: orhun/git-cliff-action@v4
+      - name: Set up Go
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
-          config: cliff.toml
-          args: --output CHANGELOG.md
+          go-version: '1.21'
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Run GoReleaser (Dry Run)
+        if: inputs.dry_run == true
+        uses: goreleaser/goreleaser-action@ac067437f516133269923265894e77920c3dce18 # v6.1.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean --skip=publish --skip=sign
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Commit CHANGELOG.md
+      - name: Run GoReleaser (Release)
+        if: inputs.dry_run != true
+        id: goreleaser
+        uses: goreleaser/goreleaser-action@ac067437f516133269923265894e77920c3dce18 # v6.1.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COSIGN_EXPERIMENTAL: 1
+
+      - name: Generate Job Summary
+        if: always()
         run: |
-          if git diff --quiet CHANGELOG.md; then
-            echo "No changes to CHANGELOG.md"
+          echo "## 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "**Mode:** 🧪 Dry Run (no actual release created)" >> $GITHUB_STEP_SUMMARY
           else
-            git add CHANGELOG.md
-            git commit -m "chore: update CHANGELOG.md for ${{ needs.generate-changelog.outputs.release_version }}"
-            git push origin main
+            echo "**Mode:** 🎯 Production Release" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          VERSION="${{ steps.version.outputs.version || steps.tag_version.outputs.version }}"
+          echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.goreleaser.outcome }}" == "success" ]]; then
+            echo "**Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            if [[ -n "${{ steps.goreleaser.outputs.release_url }}" ]]; then
+              echo "**Release URL:** ${{ steps.goreleaser.outputs.release_url }}" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "**Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage" >> $GITHUB_STEP_SUMMARY
+          echo "Update your workflows to use the new version:" >> $GITHUB_STEP_SUMMARY
+          echo '```yaml' >> $GITHUB_STEP_SUMMARY
+          echo "uses: broadsage/scorecard-action@$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Update Major Version Tag
+        if: inputs.dry_run != true && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+        run: |
+          VERSION="${{ steps.version.outputs.version || steps.tag_version.outputs.version }}"
+          
+          # Extract major version (e.g., v1.2.3 -> v1)
+          if [[ $VERSION =~ ^v([0-9]+)\. ]]; then
+            MAJOR_VERSION="v${BASH_REMATCH[1]}"
+            
+            echo "📌 Updating major version tag: $MAJOR_VERSION -> $VERSION"
+            
+            # Force update major version tag
+            git tag -f "$MAJOR_VERSION" "$VERSION"
+            git push origin "$MAJOR_VERSION" --force
+            
+            echo "✅ Major version tag updated: $MAJOR_VERSION"
+          else
+            echo "⚠️ Could not extract major version from $VERSION"
           fi
 
-  release-summary:
-    name: Release Summary
-    needs: [generate-changelog, create-release, update-changelog]
+  # Notify on completion
+  notify:
+    name: Notify Release
+    needs: release
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && needs.release.outputs.release_version != ''
     steps:
-      - name: Generate Summary
+      - name: Notify Success
+        if: needs.release.result == 'success'
         run: |
-          TRIGGER_DISPLAY="${{ github.event_name == 'workflow_dispatch' && '🖱️ Manual' || '🏷️ Tag Push' }}"
-          VERSION="${{ needs.generate-changelog.outputs.release_version || github.ref_name }}"
-          IS_PRERELEASE="${{ needs.generate-changelog.outputs.is_prerelease }}"
+          echo "🎉 Successfully released ${{ needs.release.outputs.release_version }}"
+          echo "🔗 Release URL: ${{ needs.release.outputs.release_url }}"
           
-          {
-            echo "## 🎉 Release Complete"
-            echo ""
-            echo "**✅ Successfully created release:** $VERSION"
-            echo "**🔍 Trigger Type:** $TRIGGER_DISPLAY"
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-              echo "**📦 Version Type:** ${{ inputs.version_type }}"
-            fi
-            if [[ "$IS_PRERELEASE" == "true" ]]; then
-              echo "**⚠️ Pre-release:** This is a pre-release version"
-            fi
-            echo ""
-            echo "### 🔗 Quick Links"
-            echo "- [📋 View Release](https://github.com/${{ github.repository }}/releases/tag/$VERSION)"
-            echo "- [🏠 Repository](https://github.com/${{ github.repository }})"
-            echo "- [📊 Repository Insights](https://github.com/${{ github.repository }}/pulse)"
-            echo ""
-            echo "### 🚀 Next Steps"
-            echo "The release is now live and ready for use. Update your workflows with:"
-            echo "\`\`\`yaml"
-            echo "uses: ${{ github.repository }}@$VERSION"
-            echo "\`\`\`"
-          } >> $GITHUB_STEP_SUMMARY
-          
-          echo "🎯 Git Cliff release automation completed successfully!"
+      - name: Notify Failure
+        if: needs.release.result == 'failure'
+        run: |
+          echo "❌ Release failed for ${{ needs.release.outputs.release_version }}"
+          exit 1

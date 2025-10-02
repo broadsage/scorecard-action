@@ -1,0 +1,132 @@
+# GoReleaser configuration for scorecard-action
+# GitHub Action release automation
+# https://goreleaser.com
+
+version: 2
+
+project_name: scorecard-action
+
+# Since this is a GitHub Action (not a binary), we skip builds
+builds:
+  - skip: true
+
+# Release configuration
+release:
+  github:
+    owner: broadsage
+    name: scorecard-action
+  
+  # Use git-cliff generated changelog
+  disable: false
+  draft: false
+  prerelease: auto
+  mode: replace
+  
+  # Release name template
+  name_template: "{{.ProjectName}} {{.Version}}"
+  
+  # Use git-cliff generated CHANGELOG.md for release notes
+  header: |
+    ## Changes in {{.Version}}
+  
+  footer: |
+    **Full Changelog**: https://github.com/broadsage/scorecard-action/compare/{{.PreviousTag}}...{{.Tag}}
+    
+    ### Usage
+    ```yaml
+    - uses: broadsage/scorecard-action@{{.Version}}
+    ```
+
+# Changelog configuration - let git-cliff handle it
+changelog:
+  # Disable GoReleaser's built-in changelog since we use git-cliff
+  disable: true
+
+# Git configuration
+git:
+  tag_sort: -version:refname
+
+# Archives - package action files for releases
+archives:
+  - id: scorecard-action-archive
+    name_template: "{{ .ProjectName }}_{{ .Version }}"
+    
+    # Include all action-related files
+    files:
+      - action.yml
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      - cliff.toml
+      - examples/**/*
+    
+    # Only create a single archive (GitHub Actions are platform-independent)
+
+# Announce configuration (optional)
+announce:
+  # Skip announcement for now - can be configured later
+  skip: true
+
+# Milestone management
+milestones:
+  - close: true
+    fail_on_error: false
+    name_template: "{{ .Tag }}"
+
+# Environment variables for release
+env:
+  - GORELEASER_CURRENT_TAG={{ .Tag }}
+  - GORELEASER_PREVIOUS_TAG={{ .PreviousTag }}
+    
+# Before hooks - run before release process
+before:
+  hooks:
+    # Validate action syntax
+    - echo "🔍 Validating GitHub Action..."
+    - |
+      if ! grep -q "^name:" action.yml; then
+        echo "❌ action.yml missing 'name' field"
+        exit 1
+      fi
+    - |
+      if ! grep -q "^description:" action.yml; then
+        echo "❌ action.yml missing 'description' field"  
+        exit 1
+      fi
+    - |
+      if ! grep -q "^runs:" action.yml; then
+        echo "❌ action.yml missing 'runs' field"
+        exit 1
+      fi
+    - echo "✅ Action validation passed"
+    
+    # Generate changelog with git-cliff (will be installed in workflow)
+    - git-cliff --output CHANGELOG.md
+    - echo "📝 Generated changelog with git-cliff"
+# Sign releases with cosign (optional - for security)
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: "${artifact}.pem"
+    args:
+      - "sign-blob"
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: all
+    output: true
+
+# Docker images (if needed for action distribution)
+# Since this is a composite action, we likely don't need Docker images
+# but keeping this commented for future use
+# dockers:
+#   - image_templates:
+#       - "ghcr.io/broadsage/{{ .ProjectName }}:{{ .Tag }}"
+#       - "ghcr.io/broadsage/{{ .ProjectName }}:latest"
+#     dockerfile: Dockerfile
+#     use: buildx
+#     build_flag_templates:
+#       - "--platform=linux/amd64"
+#       - "--platform=linux/arm64"

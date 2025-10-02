@@ -352,6 +352,34 @@ The action automatically installs required tools (jq, bc). No additional setup n
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### Development & Release Process
+
+This project uses [GoReleaser](https://goreleaser.com/) for automated releases with integrated [git-cliff](https://git-cliff.org/) changelog generation.
+
+**Creating a Release:**
+
+1. Push changes to `main` branch with [conventional commits](https://www.conventionalcommits.org/)
+2. Create a new version tag: `git tag v1.2.3` (follow [semantic versioning](https://semver.org/))
+3. Push the tag: `git push origin v1.2.3`
+4. GoReleaser automatically creates the release with changelog
+
+**Testing Releases:**
+
+```bash
+# Dry-run to validate configuration
+gh workflow run release.yml -f dry_run=true
+
+# Or test GoReleaser locally
+goreleaser release --snapshot --clean
+```
+
+The release process:
+
+- Validates action.yml syntax and examples
+- Generates changelog using git-cliff
+- Creates GitHub release with artifacts
+- Updates major version tags (v1, v2, etc.)
+
 ## 📄 License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

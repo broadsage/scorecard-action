@@ -42,6 +42,22 @@ act -j test-action
 - **Real Features**: Only use implemented inputs/outputs
 - **Clear Use Cases**: Show practical scenarios
 
+### Release Process
+
+This project uses automated releases with GoReleaser:
+
+- **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) format
+- **Versioning**: Follow [Semantic Versioning](https://semver.org/) (major.minor.patch)
+- **Releases**: Created automatically when tags are pushed
+- **Changelog**: Generated using git-cliff from commit history
+
+**Creating a Release:**
+
+1. Ensure all changes are merged to `main`
+2. Create and push a version tag: `git tag v1.2.3 && git push origin v1.2.3`
+3. GoReleaser workflow runs automatically
+4. Release appears on GitHub with generated changelog
+
 ## 🎯 Focus Areas
 
 This action enhances OpenSSF Scorecard by:
