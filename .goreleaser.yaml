@@ -85,27 +85,11 @@ env:
   - GORELEASER_CURRENT_TAG={{ .Tag }}
   - GORELEASER_PREVIOUS_TAG={{ .PreviousTag }}
     
-# Before hooks - run before release process
+# Before hooks - run before release process  
 before:
   hooks:
     # Validate action syntax
-    - echo "🔍 Validating GitHub Action..."
-    - |
-      if ! grep -q "^name:" action.yml; then
-        echo "❌ action.yml missing 'name' field"
-        exit 1
-      fi
-    - |
-      if ! grep -q "^description:" action.yml; then
-        echo "❌ action.yml missing 'description' field"  
-        exit 1
-      fi
-    - |
-      if ! grep -q "^runs:" action.yml; then
-        echo "❌ action.yml missing 'runs' field"
-        exit 1
-      fi
-    - echo "✅ Action validation passed"
+    - bash -c 'echo "🔍 Validating GitHub Action..." && grep -q "^name:" action.yml && grep -q "^description:" action.yml && grep -q "^runs:" action.yml && echo "✅ Action validation passed"'
 # Sign releases with cosign (optional - for security)
 signs:
   - cmd: cosign
