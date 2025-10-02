@@ -16,18 +16,13 @@ release:
     owner: broadsage
     name: scorecard-action
   
-  # Use git-cliff generated changelog
   disable: false
   draft: false
   prerelease: auto
   mode: replace
   
   # Release name template
-  name_template: "{{.ProjectName}} {{.Version}}"
-  
-  # Use git-cliff generated CHANGELOG.md for release notes
-  header: |
-    ## Changes in {{.Version}}
+  name_template: "{{.Version}}"
   
   footer: |
     **Full Changelog**: https://github.com/broadsage/scorecard-action/compare/{{.PreviousTag}}...{{.Tag}}
@@ -66,8 +61,6 @@ archives:
       - README.md
       - LICENSE
       - examples/**/*
-    
-    # Only create a single archive (GitHub Actions are platform-independent)
 
 # Announce configuration (optional)
 announce:
@@ -102,16 +95,3 @@ signs:
       - "--yes"
     artifacts: all
     output: true
-
-# Docker images (if needed for action distribution)
-# Since this is a composite action, we likely don't need Docker images
-# but keeping this commented for future use
-# dockers:
-#   - image_templates:
-#       - "ghcr.io/broadsage/{{ .ProjectName }}:{{ .Tag }}"
-#       - "ghcr.io/broadsage/{{ .ProjectName }}:latest"
-#     dockerfile: Dockerfile
-#     use: buildx
-#     build_flag_templates:
-#       - "--platform=linux/amd64"
-#       - "--platform=linux/arm64"
