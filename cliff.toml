@@ -56,20 +56,37 @@ body = """
 {% endfor -%}
 {% endif -%}
 
-{%- set maintenance_types = ["refactor", "chore", "ci", "build", "style", "test"] -%}
-{%- set maintenance_commits = commits | filter(attribute="group", value=maintenance_types) -%}
-{%- if maintenance_commits %}
+{%- set refactor_commits = commits | filter(attribute="group", value="refactor") -%}
+{%- set chore_commits = commits | filter(attribute="group", value="chore") -%}
+{%- set ci_commits = commits | filter(attribute="group", value="ci") -%}
+{%- set build_commits = commits | filter(attribute="group", value="build") -%}
+{%- set style_commits = commits | filter(attribute="group", value="style") -%}
+{%- set test_commits = commits | filter(attribute="group", value="test") -%}
+{%- if refactor_commits or chore_commits or ci_commits or build_commits or style_commits or test_commits %}
 ### 🔧 Maintenance
-{% for commit in maintenance_commits -%}
-    {%- set type_emoji = {"refactor": "♻️", "chore": "🧹", "ci": "👷", "build": "📦", "style": "💄", "test": "✅"} -%}
-    - {{ type_emoji[commit.group] | default(value="🔧") }} {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
+{% for commit in refactor_commits -%}
+- ♻️  {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
+{% endfor -%}
+{% for commit in chore_commits -%}
+- 🧹 {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
+{% endfor -%}
+{% for commit in ci_commits -%}
+- 👷 {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
+{% endfor -%}
+{% for commit in build_commits -%}
+- 📦 {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
+{% endfor -%}
+{% for commit in style_commits -%}
+- 💄 {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
+{% endfor -%}
+{% for commit in test_commits -%}
+- ✅ {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
 {% endfor -%}
 {% endif -%}
 
 {%- set breaking_count = commits | filter(attribute="breaking") | length -%}
 {%- set feat_count = commits | filter(attribute="group", value="feat") | filter(attribute="breaking", value=false) | length -%}
 {%- set fix_count = commits | filter(attribute="group", value="fix") | length -%}
-{%- set maintenance_count = maintenance_commits | length -%}
 {%- set total_commits = commits | length -%}
 
 {%- if total_commits > 0 %}
@@ -83,9 +100,6 @@ body = """
 {%- if fix_count > 0 %}
 - **Bug Fixes**: {{ fix_count }}
 {%- endif -%}
-{%- if maintenance_count > 0 %}
-- **Maintenance**: {{ maintenance_count }}
-{%- endif %}
 - **Total Changes**: {{ total_commits }} commit{{ total_commits | pluralize }}
 
 {%- endif %}
