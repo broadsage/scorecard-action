@@ -24,6 +24,11 @@ release:
   # Release name template
   name_template: "{{.Tag}}"
   
+  # Release header with changelog description
+  header: |
+    All notable changes to this project will be documented in this file.
+    See [Conventional Commits](https://conventionalcommits.org/) for commit guidelines.
+  
   footer: |
     ## 🙏 Contributors
     
@@ -39,6 +44,10 @@ release:
 # Changelog configuration - use GoReleaser's built-in changelog
 changelog:
   use: github
+  
+  # Format: "2.3.6 - 2025-10-02"
+  format: "{{.Version}} - {{.Date}}"
+  
   groups:
     - title: 🚀 Features
       regexp: "^.*feat[(\\w)]*:+.*$"
