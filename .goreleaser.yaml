@@ -37,10 +37,19 @@ release:
     - uses: broadsage/scorecard-action@{{.Version}}
     ```
 
-# Changelog configuration - let git-cliff handle it
+# Changelog configuration - use GoReleaser's built-in changelog
 changelog:
-  # Disable GoReleaser's built-in changelog since we use git-cliff
-  disable: true
+  use: github
+  groups:
+    - title: 🚀 Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: 🐛 Bug Fixes
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: 🔧 Other Changes
+      regexp: "^.*$"
+      order: 999
 
 # Git configuration
 git:
@@ -56,8 +65,6 @@ archives:
       - action.yml
       - README.md
       - LICENSE
-      - CHANGELOG.md
-      - cliff.toml
       - examples/**/*
     
     # Only create a single archive (GitHub Actions are platform-independent)
@@ -99,10 +106,6 @@ before:
         exit 1
       fi
     - echo "✅ Action validation passed"
-    
-    # Generate changelog with git-cliff (will be installed in workflow)
-    - git-cliff --output CHANGELOG.md
-    - echo "📝 Generated changelog with git-cliff"
 # Sign releases with cosign (optional - for security)
 signs:
   - cmd: cosign

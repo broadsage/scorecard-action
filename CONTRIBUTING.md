@@ -49,7 +49,7 @@ This project uses automated releases with GoReleaser:
 - **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) format
 - **Versioning**: Follow [Semantic Versioning](https://semver.org/) (major.minor.patch)
 - **Releases**: Created automatically when tags are pushed
-- **Changelog**: Generated using git-cliff from commit history
+- **Changelog**: Generated automatically from conventional commits
 
 **Creating a Release:**
 

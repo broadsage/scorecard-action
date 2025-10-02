@@ -354,7 +354,7 @@ The action automatically installs required tools (jq, bc). No additional setup n
 
 ### Development & Release Process
 
-This project uses [GoReleaser](https://goreleaser.com/) for automated releases with integrated [git-cliff](https://git-cliff.org/) changelog generation.
+This project uses [GoReleaser](https://goreleaser.com/) for automated releases and changelog generation.
 
 **Creating a Release:**
 
@@ -376,7 +376,7 @@ goreleaser release --snapshot --clean
 The release process:
 
 - Validates action.yml syntax and examples
-- Generates changelog using git-cliff
+- Generates changelog from conventional commits
 - Creates GitHub release with artifacts
 - Updates major version tags (v1, v2, etc.)
 
