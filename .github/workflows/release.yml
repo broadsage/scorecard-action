@@ -150,13 +150,21 @@ jobs:
         with:
           cosign-release: 'v2.4.1'
 
+      - name: Clean up temporary files
+        run: |
+          echo "🧹 Cleaning up temporary files before GoReleaser..."
+          # Remove any files created by git-cliff action
+          rm -rf bin/ git-cliff* *.tar.gz || true
+          # Ensure git working directory is clean
+          git status --porcelain
+
       - name: Run GoReleaser (Dry Run)
         if: inputs.dry_run == true
         uses: goreleaser/goreleaser-action@ac067437f516133269923265894e77920c3dce18 # v6.1.0
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean --skip=publish --skip=sign
+          args: release --snapshot --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
