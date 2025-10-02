@@ -1,9 +1,13 @@
-# Git Cliff Configuration for Scorecard Action
-# Migrated from Python release script with enhanced industry-standard features
+# git-cliff ~ configuration file
 # https://git-cliff.org/docs/configuration
 
+[remote.github]
+owner = "broadsage"
+repo = "scorecard-action"
+
 [changelog]
-# Changelog header
+# A Tera template to be rendered as the changelog's header.
+# See https://keats.github.io/tera/docs/#introduction
 header = """
 # Changelog
 
@@ -11,187 +15,122 @@ All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
 """
-
-# Template for the changelog body
-# https://keats.github.io/tera/docs/#introduction
+# A Tera template to be rendered for each release in the changelog.
+# See https://keats.github.io/tera/docs/#introduction
 body = """
-## 🚀 What's Changed
-
-{%- macro render_commit(commit) -%}
-    - {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}{%- if commit.links %} ({% for link in commit.links -%}[{{link.text}}]({{link.href}}){% if not loop.last %}, {% endif %}{%- endfor -%}){% endif -%}
+{%- macro remote_url() -%}
+  https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}
 {%- endmacro -%}
 
-{%- if commits | filter(attribute="breaking") %}
-### 💥 Breaking Changes
-{% for commit in commits | filter(attribute="breaking") -%}
-{{ self::render_commit(commit=commit) }}
-{% endfor -%}
-{% endif -%}
+{% macro print_commit(commit) -%}
+    - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
+        {% if commit.breaking %}[**breaking**] {% endif %}\
+        {{ commit.message | upper_first }} - \
+        ([{{ commit.id | truncate(length=7, end="") }}]({{ self::remote_url() }}/commit/{{ commit.id }}))\
+{% endmacro -%}
 
-{%- if commits | filter(attribute="group", value="feat") %}
-### ✨ New Features
-{% for commit in commits | filter(attribute="group", value="feat") | filter(attribute="breaking", value=false) -%}
-{{ self::render_commit(commit=commit) }}
-{% endfor -%}
-{% endif -%}
+{% if version %}\
+    {% if previous.version %}\
+        ## [{{ version | trim_start_matches(pat="v") }}]\
+          ({{ self::remote_url() }}/compare/{{ previous.version }}..{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% else %}\
+        ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% endif %}\
+{% else %}\
+    ## [unreleased]
+{% endif %}\
 
-{%- if commits | filter(attribute="group", value="fix") %}
-### 🐛 Bug Fixes
-{% for commit in commits | filter(attribute="group", value="fix") -%}
-{{ self::render_commit(commit=commit) }}
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits
+    | filter(attribute="scope")
+    | sort(attribute="scope") %}
+        {{ self::print_commit(commit=commit) }}
+    {%- endfor %}
+    {% for commit in commits %}
+        {%- if not commit.scope -%}
+            {{ self::print_commit(commit=commit) }}
+        {% endif -%}
+    {% endfor -%}
 {% endfor -%}
-{% endif -%}
-
-{%- if commits | filter(attribute="group", value="perf") %}
-### ⚡ Performance Improvements
-{% for commit in commits | filter(attribute="group", value="perf") -%}
-{{ self::render_commit(commit=commit) }}
-{% endfor -%}
-{% endif -%}
-
-{%- if commits | filter(attribute="group", value="docs") %}
-### 📚 Documentation
-{% for commit in commits | filter(attribute="group", value="docs") -%}
-{{ self::render_commit(commit=commit) }}
-{% endfor -%}
-{% endif -%}
-
-{%- set refactor_commits = commits | filter(attribute="group", value="refactor") -%}
-{%- set chore_commits = commits | filter(attribute="group", value="chore") -%}
-{%- set ci_commits = commits | filter(attribute="group", value="ci") -%}
-{%- set build_commits = commits | filter(attribute="group", value="build") -%}
-{%- set style_commits = commits | filter(attribute="group", value="style") -%}
-{%- set test_commits = commits | filter(attribute="group", value="test") -%}
-{%- if refactor_commits or chore_commits or ci_commits or build_commits or style_commits or test_commits %}
-### 🔧 Maintenance
-{% for commit in refactor_commits -%}
-- ♻️  {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
-{% endfor -%}
-{% for commit in chore_commits -%}
-- 🧹 {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
-{% endfor -%}
-{% for commit in ci_commits -%}
-- 👷 {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
-{% endfor -%}
-{% for commit in build_commits -%}
-- 📦 {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
-{% endfor -%}
-{% for commit in style_commits -%}
-- 💄 {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
-{% endfor -%}
-{% for commit in test_commits -%}
-- ✅ {% if commit.scope -%}**{{ commit.scope }}**: {%- endif -%}{{ commit.message | upper_first }}
-{% endfor -%}
-{% endif -%}
-
-{%- set breaking_count = commits | filter(attribute="breaking") | length -%}
-{%- set feat_count = commits | filter(attribute="group", value="feat") | filter(attribute="breaking", value=false) | length -%}
-{%- set fix_count = commits | filter(attribute="group", value="fix") | length -%}
-{%- set total_commits = commits | length -%}
-
-{%- if total_commits > 0 %}
-### 📊 Release Statistics
-{%- if breaking_count > 0 %}
-- **Breaking Changes**: {{ breaking_count }}
-{%- endif -%}
-{%- if feat_count > 0 %}
-- **New Features**: {{ feat_count }}
-{%- endif -%}
-{%- if fix_count > 0 %}
-- **Bug Fixes**: {{ fix_count }}
-{%- endif -%}
-- **Total Changes**: {{ total_commits }} commit{{ total_commits | pluralize }}
-
+{%- if github -%}
+{% if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
+  ## New Contributors ❤️
+{% endif %}\
+{% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
+  * @{{ contributor.username }} made their first contribution
+    {%- if contributor.pr_number %} in \
+      [#{{ contributor.pr_number }}]({{ self::remote_url() }}/pull/{{ contributor.pr_number }}) \
+    {%- endif %}
+{%- endfor -%}
 {%- endif %}
 
----
-
-### 🚀 Usage
-Update your workflows to use the latest version:
-```yaml
-uses: broadsage/scorecard-action@{{ version }}
-```
-
-*This release was automatically generated by Git Cliff.*
 
 """
-
-# Changelog footer
+# A Tera template to be rendered as the changelog's footer.
+# See https://keats.github.io/tera/docs/#introduction
 footer = """
 <!-- generated by git-cliff -->
 """
-
-# Remove the leading and trailing whitespace from the templates
+# Remove leading and trailing whitespaces from the changelog's body.
 trim = true
-
-# Postprocessors to apply additional transformations
+# An array of regex based postprocessors to modify the changelog.
 postprocessors = [
-    # Clean up excessive newlines  
-    { pattern = '\n{3,}', replace = '\n\n' },
-    # Ensure proper emoji spacing
-    { pattern = '([🎯🚀💥✨🐛⚡📚🔧📊])([^ ])', replace = '${1} ${2}' },
+  # Replace the placeholder `<REPO>` with a URL.
+  { pattern = '<REPO>', replace = "https://github.com/broadsage/scorecard-action" }, # replace repository URL
 ]
 
 [git]
-# Parse the commits based on https://www.conventionalcommits.org
+# Parse commits according to the conventional commits specification.
+# See https://www.conventionalcommits.org
 conventional_commits = true
-# Filter out the commits that are not conventional
-filter_unconventional = false
-# Process each line of a commit as an individual commit
+# Exclude commits that do not match the conventional commits specification.
+filter_unconventional = true
+# Split commits on newlines, treating each line as an individual commit.
 split_commits = false
-# Regex for preprocessing the commit messages
+# An array of regex based parsers to modify commit messages prior to further processing.
 commit_preprocessors = [
-    # Remove issue numbers from commit messages  
-    { pattern = '\(#\d+\)', replace = '' },
-    # Clean up merge commit messages
-    { pattern = '^Merge pull request #\d+ from .+', replace = 'merge: pull request' },
-    # Standardize Dependabot commit messages
-    { pattern = '^Bump (.+) from (.+) to (.+)', replace = 'chore(deps): bump ${1} from ${2} to ${3}' },
+  # Replace issue numbers with link templates to be updated in `changelog.postprocessors`.
+  { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](<REPO>/issues/${2}))" },
+  # Check spelling of the commit message using https://github.com/crate-ci/typos.
+  # If the spelling is incorrect, it will be fixed automatically.
+  { pattern = '.*', replace_command = 'typos --write-changes -' },
 ]
-
-# Regex for parsing and grouping commits
+# An array of regex based parsers for extracting data from the commit message.
+# Assigns commits to groups.
+# Optionally sets the commit's scope and can decide to exclude commits from further processing.
 commit_parsers = [
-    { message = "^feat", group = "feat" },
-    { message = "^fix", group = "fix" },
-    { message = "^docs", group = "docs" },
-    { message = "^perf", group = "perf" },
-    { message = "^refactor", group = "refactor" },
-    { message = "^style", group = "style" },
-    { message = "^test", group = "test" },
-    { message = "^chore\\(release\\): prepare for", skip = true },
-    { message = "^chore\\(deps.*\\)", group = "chore" },
-    { message = "^chore|ci|build", group = "chore" },
-    { message = "^revert", group = "revert" },
-    # Parse breaking changes
-    { message = ".*!", group = "feat", breaking = true },
-    # Catch all for non-conventional commits
-    { message = ".*", group = "chore" },
+  { message = "^feat", group = "<!-- 0 -->⛰️  Features" },
+  { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
+  { message = "^doc", group = "<!-- 3 -->📚 Documentation" },
+  { message = "^perf", group = "<!-- 4 -->⚡ Performance" },
+  { message = "^refactor\\(clippy\\)", skip = true },
+  { message = "^refactor", group = "<!-- 2 -->🚜 Refactor" },
+  { message = "^style", group = "<!-- 5 -->🎨 Styling" },
+  { message = "^test", group = "<!-- 6 -->🧪 Testing" },
+  { message = "^chore\\(release\\): prepare for", skip = true },
+  { message = "^chore\\(deps.*\\)", skip = true },
+  { message = "^chore\\(pr\\)", skip = true },
+  { message = "^chore\\(pull\\)", skip = true },
+  { message = "^chore\\(npm\\).*yarn\\.lock", skip = true },
+  { message = "^chore|^ci", group = "<!-- 7 -->⚙️ Miscellaneous Tasks" },
+  { body = ".*security", group = "<!-- 8 -->🛡️ Security" },
+  { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
 ]
-# Protect breaking changes from being skipped due to matching a skipping commit_parser
+# Prevent commits that are breaking from being excluded by commit parsers.
 protect_breaking_commits = false
-# Filter out the commits that are not matched by commit parsers
+# Exclude commits that are not matched by any commit parser.
 filter_commits = false
-# Regex for matching git tags
+# Regex to select git tags that represent releases.
 tag_pattern = "v[0-9].*"
-# Regex for skipping tags
-skip_tags = "v0.1.0-beta.1"
-# Regex for ignoring tags
-ignore_tags = ""
-# Sort the tags topologically
+# Regex to select git tags that do not represent proper releases.
+# Takes precedence over `tag_pattern`.
+# Changes belonging to these releases will be included in the next release.
+skip_tags = "beta|alpha"
+# Regex to exclude git tags after applying the tag_pattern.
+ignore_tags = "rc|v2.1.0|v2.1.1"
+# Order releases topologically instead of chronologically.
 topo_order = false
-# Sort the commits inside sections by oldest/newest order
-sort_commits = "oldest"
-# Limit the number of commits included in the changelog.
-# limit_commits = 42
-
-[bump]
-# Configures automatic version bumping based on commit types
-features_always_bump_minor = true
-breaking_always_bump_major = true
-custom_major_increment_regex = "^(feat|fix)!:"
-custom_minor_increment_regex = "^feat"
-custom_patch_increment_regex = "^fix"
-
-[remote.github]
-owner = "broadsage"
-repo = "scorecard-action"
+# Order of commits in each group/release within the changelog.
+# Allowed values: newest, oldest
+sort_commits = "newest"

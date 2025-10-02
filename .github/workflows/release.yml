@@ -1,55 +1,35 @@
 name: Release Automation
 
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       version_type:
-        description: 'Version increment type'
+        description: 'Version type to release'
         required: true
         default: 'patch'
         type: choice
         options:
-        - patch
-        - minor
-        - major
-      release_notes:
-        description: 'Custom release notes (optional)'
-        required: false
-        type: string
-      dry_run:
-        description: 'Dry run - validate without creating release'
-        required: false
-        default: false
-        type: boolean
+          - patch
+          - minor
+          - major
+  push:
+    tags:
+      - "v*.*.*"
 
 jobs:
-  release:
-    if: |
-      (github.event_name == 'pull_request' && 
-       github.event.pull_request.merged == true && 
-       (github.event.pull_request.user.login == 'dependabot[bot]' ||
-        contains(github.event.pull_request.labels.*.name, 'release') ||
-        contains(github.event.pull_request.title, 'feat') ||
-        contains(github.event.pull_request.title, 'fix') ||
-        contains(github.event.pull_request.title, 'chore') ||
-        github.event.pull_request.base.ref == 'main')) ||
-      github.event_name == 'workflow_dispatch'
+  generate-changelog:
+    name: Generate changelog
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
-      pull-requests: read
-    
+    outputs:
+      release_body: ${{ steps.git-cliff.outputs.content }}
+      release_version: ${{ steps.version.outputs.new_version }}
+      is_prerelease: ${{ contains(github.ref, '-') || contains(steps.version.outputs.new_version, '-') }}
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
 
       - name: Configure Git
         run: |
@@ -58,6 +38,7 @@ jobs:
 
       - name: Calculate Next Version
         id: version
+        if: github.event_name == 'workflow_dispatch'
         run: |
           # Get latest version tag
           LATEST_TAG=$(git tag -l "v*" --sort=-version:refname | head -1)
@@ -94,20 +75,52 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "📦 Version: $LATEST_TAG → $NEW_VERSION ($VERSION_TYPE)"
 
+      - name: Set Release Version from Tag
+        id: tag_version
+        if: github.event_name == 'push'
+        run: |
+          NEW_VERSION=${GITHUB_REF#refs/tags/}
+          # Get previous version for changelog range
+          LATEST_TAG=$(git tag -l "v*" --sort=-version:refname | grep -v "^${NEW_VERSION}$" | head -1)
+          if [[ -z "$LATEST_TAG" ]]; then
+            LATEST_TAG="v0.0.0"
+          fi
+          
+          echo "previous_version=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Tagged Release: $LATEST_TAG → $NEW_VERSION"
+
       - name: Generate Release Notes
-        id: changelog
         uses: orhun/git-cliff-action@v4
+        id: git-cliff
         with:
           config: cliff.toml
-          args: --verbose --tag ${{ steps.version.outputs.new_version }} --strip all ${{ steps.version.outputs.previous_version }}..HEAD
-
-      - name: Process Release
-        if: ${{ inputs.dry_run != true }}
+          args: -vv --latest --no-exec --github-repo ${{ github.repository }}
         env:
+          OUTPUT: CHANGELOG.md
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NEW_VERSION: ${{ steps.version.outputs.new_version }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-          CHANGELOG: ${{ steps.changelog.outputs.content }}
+
+  create-release:
+    name: Create Release
+    needs: generate-changelog
+    runs-on: ubuntu-latest
+    if: always() && (needs.generate-changelog.result == 'success')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create Version Tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          NEW_VERSION: ${{ needs.generate-changelog.outputs.release_version }}
         run: |
           # Create version tag
           git tag -a "$NEW_VERSION" -m "chore: release $NEW_VERSION"
@@ -117,71 +130,87 @@ jobs:
           MAJOR_VERSION=$(echo "$NEW_VERSION" | cut -d. -f1)
           git tag -f "$MAJOR_VERSION" "$NEW_VERSION"
           git push origin "$MAJOR_VERSION" --force
-          
-          # Generate release notes
-          if [[ -n "$RELEASE_NOTES" ]]; then
-            # Use custom release notes if provided
-            FINAL_NOTES="## 🚀 What's New
 
-          $RELEASE_NOTES
-
-          ---
-
-          ### 🚀 Usage
-          Update your workflows to use the latest version:
-          \`\`\`yaml
-          uses: broadsage/scorecard-action@$NEW_VERSION
-          \`\`\`
-
-          *This release was manually created via GitHub Actions workflow.*"
-          else
-            # Use git-cliff generated changelog
-            FINAL_NOTES="$CHANGELOG"
-          fi
-          
-          # Create GitHub release
-          gh release create "$NEW_VERSION" \
-            --title "$NEW_VERSION" \
-            --notes "$FINAL_NOTES" \
-            --latest
-          
-      - name: Dry Run Summary
-        if: ${{ inputs.dry_run == true }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.generate-changelog.outputs.release_version || github.ref_name }}
+          name: ${{ needs.generate-changelog.outputs.release_version || github.ref_name }}
+          body: ${{ needs.generate-changelog.outputs.release_body }}
+          prerelease: ${{ needs.generate-changelog.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ needs.generate-changelog.outputs.is_prerelease != 'true' }}
         env:
-          CHANGELOG: ${{ steps.changelog.outputs.content }}
-        run: |
-          echo "## 🧪 Dry Run Complete" >> $GITHUB_STEP_SUMMARY
-          echo "**✅ Validation successful - no release created**" >> $GITHUB_STEP_SUMMARY
-          echo "**🔍 Trigger:** ${{ github.event_name == 'workflow_dispatch' && 'Manual' || 'Dependabot' }}" >> $GITHUB_STEP_SUMMARY
-          echo "**📦 Version Type:** ${{ inputs.version_type || 'patch' }}" >> $GITHUB_STEP_SUMMARY
-          echo "**🎯 Would create:** ${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📋 Generated Changelog Preview" >> $GITHUB_STEP_SUMMARY
-          echo '```markdown' >> $GITHUB_STEP_SUMMARY
-          echo "$CHANGELOG" | head -20 >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Release Summary
-        if: ${{ inputs.dry_run != true && success() }}
+  update-changelog:
+    name: Update CHANGELOG.md
+    needs: [generate-changelog, create-release]
+    runs-on: ubuntu-latest
+    if: always() && (needs.create-release.result == 'success') && github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
         run: |
-          TRIGGER_DISPLAY="${{ github.event_name == 'workflow_dispatch' && '🖱️ Manual' || '🤖 Dependabot' }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update CHANGELOG.md
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --output CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit CHANGELOG.md
+        run: |
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to CHANGELOG.md"
+          else
+            git add CHANGELOG.md
+            git commit -m "chore: update CHANGELOG.md for ${{ needs.generate-changelog.outputs.release_version }}"
+            git push origin main
+          fi
+
+  release-summary:
+    name: Release Summary
+    needs: [generate-changelog, create-release, update-changelog]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Generate Summary
+        run: |
+          TRIGGER_DISPLAY="${{ github.event_name == 'workflow_dispatch' && '🖱️ Manual' || '🏷️ Tag Push' }}"
+          VERSION="${{ needs.generate-changelog.outputs.release_version || github.ref_name }}"
+          IS_PRERELEASE="${{ needs.generate-changelog.outputs.is_prerelease }}"
+          
           {
             echo "## 🎉 Release Complete"
             echo ""
-            echo "**✅ Successfully created release:** ${{ steps.version.outputs.new_version }}"
+            echo "**✅ Successfully created release:** $VERSION"
             echo "**🔍 Trigger Type:** $TRIGGER_DISPLAY"
-            echo "**📦 Version Type:** ${{ inputs.version_type || 'patch' }}"
-            echo "${{ github.event_name == 'pull_request' && format('**📋 PR Processed:** {0}', github.event.pull_request.title) || '' }}"
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              echo "**📦 Version Type:** ${{ inputs.version_type }}"
+            fi
+            if [[ "$IS_PRERELEASE" == "true" ]]; then
+              echo "**⚠️ Pre-release:** This is a pre-release version"
+            fi
             echo ""
             echo "### 🔗 Quick Links"
-            echo "- [📋 View Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.new_version }})"
+            echo "- [📋 View Release](https://github.com/${{ github.repository }}/releases/tag/$VERSION)"
             echo "- [🏠 Repository](https://github.com/${{ github.repository }})"
             echo "- [📊 Repository Insights](https://github.com/${{ github.repository }}/pulse)"
             echo ""
             echo "### 🚀 Next Steps"
             echo "The release is now live and ready for use. Update your workflows with:"
             echo "\`\`\`yaml"
-            echo "uses: broadsage/scorecard-action@${{ steps.version.outputs.new_version }}"
+            echo "uses: ${{ github.repository }}@$VERSION"
             echo "\`\`\`"
           } >> $GITHUB_STEP_SUMMARY
+          
           echo "🎯 Git Cliff release automation completed successfully!"
