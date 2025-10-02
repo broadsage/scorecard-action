@@ -3,11 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [2.3.6](https://github.com/broadsage/scorecard-action/compare/v2.3.5..v2.3.6) - 2025-10-02
+
+### ⛰️  Features
+
+- Update changelog template to show all contributors instead of new contributors only - ([ffa2afd](https://github.com/broadsage/scorecard-action/commit/ffa2afd274e71d7d53d9e6170430317649c05da5))
+
+### ⚙️ Miscellaneous Tasks
+
+- Update CHANGELOG.md for v2.3.5 - ([add617d](https://github.com/broadsage/scorecard-action/commit/add617da246335b919bbb790a29c75f471f86ff0))
+## Contributors ❤️
+
+* @github-actions[bot]
+
+
 ## [2.3.5](https://github.com/broadsage/scorecard-action/compare/v2.3.4..v2.3.5) - 2025-10-02
 
 ### 🐛 Bug Fixes
 
 - Remove typos preprocessor from cliff.toml - ([a1584af](https://github.com/broadsage/scorecard-action/commit/a1584af9c1fb4bbd0981860f73fa9c1eb2de9b58))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [2.3.4](https://github.com/broadsage/scorecard-action/compare/v2.3.3..v2.3.4) - 2025-10-02
@@ -19,6 +36,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### ⚙️ Miscellaneous Tasks
 
 - Update CHANGELOG.md for v2.3.3 - ([8040766](https://github.com/broadsage/scorecard-action/commit/80407661fc8a8582653e12ab80fe183e57cf18ba))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [2.3.3](https://github.com/broadsage/scorecard-action/compare/v2.3.2..v2.3.3) - 2025-10-02
@@ -26,6 +46,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### ⛰️  Features
 
 - Refactor release workflow using git-cliff repository pattern - ([7695c98](https://github.com/broadsage/scorecard-action/commit/7695c98af7485a4702dbaa04c402f52223245233))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [2.3.2](https://github.com/broadsage/scorecard-action/compare/v2.3.1..v2.3.2) - 2025-10-02
@@ -33,6 +56,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### 🐛 Bug Fixes
 
 - Use HEAD instead of non-existent tag in git-cliff range - ([e99f3a1](https://github.com/broadsage/scorecard-action/commit/e99f3a126755e5f55186089d2d30f31ca24e6115))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [2.3.1](https://github.com/broadsage/scorecard-action/compare/v2.3.0..v2.3.1) - 2025-10-02
@@ -40,6 +66,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### 🐛 Bug Fixes
 
 - Correct git-cliff args syntax and template engine compatibility - ([5e13407](https://github.com/broadsage/scorecard-action/commit/5e13407fa3c5980cb5120576a4adb24be73aac4d))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [2.3.0](https://github.com/broadsage/scorecard-action/compare/v2.2.0..v2.3.0) - 2025-10-01
@@ -47,6 +76,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### 🐛 Bug Fixes
 
 - Generate fresh release notes instead of reading existing changelog - ([fa83a52](https://github.com/broadsage/scorecard-action/commit/fa83a520e117e9f55b9bf5f8c0d6e3f9d20b2d5a))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [2.2.0](https://github.com/broadsage/scorecard-action/compare/v2.0.0..v2.2.0) - 2025-10-01
@@ -58,6 +90,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### 🐛 Bug Fixes
 
 - Resolve git cliff command error in GitHub Actions - ([c3150f1](https://github.com/broadsage/scorecard-action/commit/c3150f18df664e2e3f43b93315a6259135b13396))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [2.0.0](https://github.com/broadsage/scorecard-action/compare/v1.1.1..v2.0.0) - 2025-10-01
@@ -65,6 +100,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### ⛰️  Features
 
 - Implement industry-standard semantic versioning and conventional commits - ([1420dbc](https://github.com/broadsage/scorecard-action/commit/1420dbcb900263d2b2f00a240ea07c02ffdf9ac4))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [1.1.1](https://github.com/broadsage/scorecard-action/compare/v1.1.0..v1.1.1) - 2025-10-01
@@ -72,6 +110,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### 🚜 Refactor
 
 - Comprehensive cleanup and optimization of release script - ([f7132f3](https://github.com/broadsage/scorecard-action/commit/f7132f34945681ea09e5d81e426a7198d8ecf6bd))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [1.1.0](https://github.com/broadsage/scorecard-action/compare/v1.0.0..v1.1.0) - 2025-10-01
@@ -79,6 +120,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### 🐛 Bug Fixes
 
 - Remove duplicate 'Release' prefix from release titles - ([2ad76d3](https://github.com/broadsage/scorecard-action/commit/2ad76d390166ec93ebf8351a6670abfc7d584389))
+## Contributors ❤️
+
+* @github-actions[bot]
 
 
 ## [1.0.0] - 2025-10-01
@@ -115,11 +159,13 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 - Simplify workflow architecture and standardize naming - ([2730f50](https://github.com/broadsage/scorecard-action/commit/2730f507bd67ccd492bd5888ec1d8409af70ff55))
 - Migrate release automation from bash to Python - ([aa6d573](https://github.com/broadsage/scorecard-action/commit/aa6d573ce958a503b2323b34a893d4216e7d3cd8))
 - Simplify workflows with Dependabot automation - ([e04734f](https://github.com/broadsage/scorecard-action/commit/e04734fcb6cc39228855dc4d1110d09ff2dbe9f8))
+## Contributors ❤️
 
-## New Contributors ❤️
+* @github-actions[bot]
 
-* @github-actions[bot] made their first contribution
-* @dependabot[bot] made their first contribution in [#6](https://github.com/broadsage/scorecard-action/pull/6)
-* @Jagadeep1928 made their first contribution
+* @dependabot[bot] in [#6](https://github.com/broadsage/scorecard-action/pull/6)
+
+* @Jagadeep1928
+
 
 <!-- generated by git-cliff -->
