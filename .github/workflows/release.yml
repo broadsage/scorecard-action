@@ -90,6 +90,9 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "📦 Tagged Release: $LATEST_TAG → $NEW_VERSION"
 
+      - name: Check typos
+        uses: crate-ci/typos@d7e6241ebf2f59df88a9e53567d2fdc5141c2fd1 # master
+
       - name: Generate Release Notes
         uses: orhun/git-cliff-action@v4
         id: git-cliff
@@ -153,6 +156,9 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check typos
+        uses: crate-ci/typos@d7e6241ebf2f59df88a9e53567d2fdc5141c2fd1 # master
 
       - name: Configure Git
         run: |
