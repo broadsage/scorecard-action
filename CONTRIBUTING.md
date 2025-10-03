@@ -44,19 +44,19 @@ act -j test-action
 
 ### Release Process
 
-This project uses automated releases with GoReleaser:
+This project uses automated releases with semantic-release:
 
 - **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) format
 - **Versioning**: Follow [Semantic Versioning](https://semver.org/) (major.minor.patch)
-- **Releases**: Created automatically when tags are pushed
+- **Releases**: Created automatically when commits are pushed to main
 - **Changelog**: Generated automatically from conventional commits
 
 **Creating a Release:**
 
 1. Ensure all changes are merged to `main`
-2. Create and push a version tag: `git tag v1.2.3 && git push origin v1.2.3`
-3. GoReleaser workflow runs automatically
-4. Release appears on GitHub with generated changelog
+2. Push commits using conventional commit format (feat:, fix:, etc.)
+3. Semantic-release workflow runs automatically
+4. Release appears on GitHub with generated changelog and version tags
 
 ## 🎯 Focus Areas
 

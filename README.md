@@ -354,7 +354,7 @@ The action automatically installs required tools (jq, bc). No additional setup n
 
 ### Development & Release Process
 
-This project uses **fully automated releases** with [GoReleaser](https://goreleaser.com/) and conventional commits.
+This project uses **fully automated releases** with [semantic-release](https://semantic-release.gitbook.io/) and conventional commits.
 
 **Automated Releases (Recommended):**
 
@@ -362,24 +362,25 @@ This project uses **fully automated releases** with [GoReleaser](https://gorelea
    - `feat:` → Minor release (v1.1.0)
    - `fix:` → Patch release (v1.0.1)
    - `feat!:` or `fix!:` → Major release (v2.0.0)
-2. **Auto-release workflow analyzes commits and creates tags automatically**
-3. GoReleaser triggers on tag creation and publishes release
+2. **Semantic-release workflow analyzes commits and creates releases automatically**
+3. GitHub releases are created with changelog and version tags
 
 **Manual Releases (When needed):**
 
 ```bash
-# Use helper script for manual control
-./scripts/create-release.sh v1.2.3
+# Test semantic-release locally (dry run)
+npm run semantic-release -- --dry-run
 
-# Or directly
-git tag v1.2.3 && git push origin v1.2.3
+# Force release (if needed)
+npm run semantic-release -- --no-ci
 ```
 
 **Testing Locally:**
 
 ```bash
-# Test GoReleaser configuration locally (no release)
-goreleaser release --snapshot --clean
+# Install dependencies and test semantic-release configuration
+npm ci
+npm run semantic-release -- --dry-run
 ```
 
 **The automated process:**
