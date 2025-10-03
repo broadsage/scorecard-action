@@ -1,0 +1,278 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  GIT_USER_NAME: "github-actions[bot]"
+  GIT_USER_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+
+jobs:
+  analyze:
+    name: Analyze Changes
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    outputs:
+      should-release: ${{ steps.version.outputs.should-release }}
+      version-bump: ${{ steps.version.outputs.version-bump }}
+      new-version: ${{ steps.version.outputs.new-version }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Analyze Version Requirements
+        id: version
+        run: |
+          # Get latest tag
+          latest_tag=$(git tag -l "v*.*.*" | sort -V | tail -n1 || echo "v0.0.0")
+          echo "Latest tag: $latest_tag"
+          
+          # Parse current version
+          if [[ "$latest_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major=${BASH_REMATCH[1]}
+            minor=${BASH_REMATCH[2]}
+            patch=${BASH_REMATCH[3]}
+          else
+            major=0; minor=0; patch=0
+          fi
+          
+          echo "Current version: $major.$minor.$patch"
+          
+          # Analyze commits since last tag
+          if [[ "$latest_tag" == "v0.0.0" ]]; then
+            commits_since_tag=$(git log --oneline --format="%s" HEAD)
+          else
+            commits_since_tag=$(git log --oneline --format="%s" "${latest_tag}..HEAD")
+          fi
+          
+          # Analyze commits for version bump requirements
+          should_release="false"
+          version_bump="patch"
+          
+          echo "🔍 Analyzing commits for release requirements..."
+          
+          # Process each commit message
+          while IFS= read -r commit_msg; do
+            # Skip empty lines
+            [[ -z "$commit_msg" ]] && continue
+            
+            echo "  📝 $commit_msg"
+            
+            # Skip maintenance commits
+            if [[ "$commit_msg" =~ ^(Merge|chore\(deps\)|deps:|ci:)|dependabot|github-actions ]]; then
+              echo "    ⏭️  Skipped (maintenance)"
+              continue
+            fi
+            
+            # Analyze conventional commit types
+            if [[ "$commit_msg" =~ (feat|fix|perf|security)!:|BREAKING ]]; then
+              version_bump="major"
+              should_release="true"
+              echo "    🚨 Breaking change → major version bump"
+            elif [[ "$commit_msg" =~ ^feat:|^feature: ]]; then
+              [[ "$version_bump" != "major" ]] && version_bump="minor"
+              should_release="true"
+              echo "    ✨ Feature → minor version bump"
+            elif [[ "$commit_msg" =~ ^(fix|bugfix|perf|security): ]]; then
+              should_release="true"
+              echo "    � Fix/improvement → patch version bump"
+            else
+              echo "    ℹ️  No version impact"
+            fi
+          done <<< "$commits_since_tag"
+          
+          # Calculate new version based on bump type
+          case "$version_bump" in
+            "major") 
+              new_version="v$((major + 1)).0.0"
+              ;;
+            "minor") 
+              new_version="v${major}.$((minor + 1)).0"
+              ;;
+            "patch") 
+              new_version="v${major}.${minor}.$((patch + 1))"
+              ;;
+            *)
+              echo "❌ Invalid version bump type: $version_bump"
+              exit 1
+              ;;
+          esac
+          
+          # Display analysis results
+          echo ""
+          echo "📋 Release Analysis Summary:"
+          echo "   Current Version: $latest_tag"
+          echo "   Should Release:  $should_release"
+          echo "   Version Bump:    $version_bump"
+          echo "   New Version:     $new_version"
+          
+          # Set job outputs
+          {
+            echo "should-release=$should_release"
+            echo "version-bump=$version_bump"
+            echo "new-version=$new_version"
+          } >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Create Release
+    needs: analyze
+    if: needs.analyze.outputs.should-release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout Repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git and Clean State
+        run: |
+          # Configure git user
+          git config user.name "${{ env.GIT_USER_NAME }}"
+          git config user.email "${{ env.GIT_USER_EMAIL }}"
+          
+          # Clean repository state
+          rm -rf dist/
+          git clean -fd
+          
+          # Verify clean state
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "⚠️ Repository has uncommitted changes:"
+            git status --short
+            exit 1
+          fi
+          
+          echo "✅ Repository is clean and ready"
+
+      - name: Create Version Tag
+        id: tag
+        run: |
+          VERSION="${{ needs.analyze.outputs.new-version }}"
+          BUMP_TYPE="${{ needs.analyze.outputs.version-bump }}"
+          
+          echo "🏷️ Creating $BUMP_TYPE release tag: $VERSION"
+          
+          # Create annotated tag with comprehensive message
+          git tag -a "$VERSION" -m "Release $VERSION
+
+          🔖 Version: $VERSION
+          📈 Bump Type: $BUMP_TYPE
+          🤖 Generated by: GitHub Actions
+          📅 Created: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          
+          This release was created automatically from conventional commits."
+          
+          # Push tag to remote
+          git push origin "$VERSION"
+          
+          echo "✅ Tag $VERSION created and pushed successfully"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and Publish Release
+        id: goreleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.1.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COSIGN_EXPERIMENTAL: 1
+
+      - name: Update Major Version Tag
+        id: major-tag
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          
+          # Extract and validate major version
+          if [[ "$VERSION" =~ ^v([0-9]+)\. ]]; then
+            MAJOR_VERSION="v${BASH_REMATCH[1]}"
+            
+            echo "🔄 Updating major version reference"
+            echo "   Full Version: $VERSION"
+            echo "   Major Tag:    $MAJOR_VERSION"
+            
+            # Force update major version tag to point to new release
+            git tag -f -a "$MAJOR_VERSION" -m "Major version $MAJOR_VERSION (latest: $VERSION)
+
+            This major version tag automatically tracks the latest release.
+            Updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            
+            git push --force origin "$MAJOR_VERSION"
+            
+            echo "✅ Major version tag $MAJOR_VERSION → $VERSION"
+            echo "major-version=$MAJOR_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ Invalid version format: $VERSION"
+            exit 1
+          fi
+
+      - name: Generate Release Summary
+        if: always()
+        run: |
+          VERSION="${{ needs.analyze.outputs.new-version }}"
+          BUMP_TYPE="${{ needs.analyze.outputs.version-bump }}"
+          MAJOR_VERSION="${{ steps.major-tag.outputs.major-version }}"
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/$VERSION"
+          
+          # Create comprehensive job summary
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## 🚀 Release Summary
+          
+          | Field | Value |
+          |-------|-------|
+          | **Version** | \`$VERSION\` |
+          | **Type** | $BUMP_TYPE release |
+          | **Major Tag** | \`$MAJOR_VERSION\` |
+          | **Trigger** | Conventional commits |
+          | **Status** | ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }} |
+          
+          EOF
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ### 🔗 Links
+          - [📋 Release Page]($RELEASE_URL)
+          - [📊 Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ### 📦 Usage
+          
+          **Specific Version (Recommended for Production):**
+          \`\`\`yaml
+          uses: ${{ github.repository }}@$VERSION
+          \`\`\`
+          
+          **Major Version (Auto-updates):**
+          \`\`\`yaml
+          uses: ${{ github.repository }}@$MAJOR_VERSION
+          \`\`\`
+          EOF
+          else
+            echo "### ❌ Release Failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "Check the workflow logs for details." >> "$GITHUB_STEP_SUMMARY"
+          fi
