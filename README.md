@@ -354,31 +354,44 @@ The action automatically installs required tools (jq, bc). No additional setup n
 
 ### Development & Release Process
 
-This project uses [GoReleaser](https://goreleaser.com/) for automated releases and changelog generation.
+This project uses **fully automated releases** with [GoReleaser](https://goreleaser.com/) and conventional commits.
 
-**Creating a Release:**
+**Automated Releases (Recommended):**
 
-1. Push changes to `main` branch with [conventional commits](https://www.conventionalcommits.org/)
-2. Create a new version tag: `git tag v1.2.3` (follow [semantic versioning](https://semver.org/))
-3. Push the tag: `git push origin v1.2.3`
-4. GoReleaser automatically creates the release with changelog
+1. Push changes to `main` with [conventional commits](https://www.conventionalcommits.org/)
+   - `feat:` → Minor release (v1.1.0)
+   - `fix:` → Patch release (v1.0.1)
+   - `feat!:` or `fix!:` → Major release (v2.0.0)
+2. **Auto-release workflow analyzes commits and creates tags automatically**
+3. GoReleaser triggers on tag creation and publishes release
 
-**Testing Releases:**
+**Manual Releases (When needed):**
 
 ```bash
-# Dry-run to validate configuration
-gh workflow run release.yml -f dry_run=true
+# Use helper script for manual control
+./scripts/create-release.sh v1.2.3
 
-# Or test GoReleaser locally
+# Or directly
+git tag v1.2.3 && git push origin v1.2.3
+```
+
+**Testing Locally:**
+
+```bash
+# Test GoReleaser configuration locally (no release)
 goreleaser release --snapshot --clean
 ```
 
-The release process:
+**The automated process:**
 
-- Validates action.yml syntax and examples
-- Generates changelog from conventional commits
-- Creates GitHub release with artifacts
-- Updates major version tags (v1, v2, etc.)
+- 🤖 **Auto-detects** version bumps from conventional commits
+- 🏷️ **Auto-creates** semantic version tags
+- ✅ **Auto-validates** action.yml and examples
+- 📝 **Auto-generates** changelog from commits  
+- 🚀 **Auto-publishes** GitHub release with artifacts
+- 🔄 **Auto-updates** major version tags (v1 → v1.2.3)
+
+> **Why automated releases?** Following conventional commits enables zero-touch releases. The system is smart enough to determine appropriate version bumps and only releases when meaningful changes are detected.
 
 ## 📄 License
 
