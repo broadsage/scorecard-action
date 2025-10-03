@@ -33,9 +33,7 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: |
-          npm install
-          npm install @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/github @semantic-release/exec
+        run: npm ci
 
       - name: Verify Action Configuration
         run: |
