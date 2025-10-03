@@ -11,8 +11,8 @@ permissions:
   attestations: write
 
 jobs:
-  release:
-    name: Semantic Release
+  semantic-release:
+    name: Release & Publish
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
@@ -20,7 +20,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
@@ -45,7 +45,7 @@ jobs:
           
           echo "✅ Action configuration is valid"
 
-      - name: Run Semantic Release
+      - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_AUTHOR_NAME: github-actions[bot]
