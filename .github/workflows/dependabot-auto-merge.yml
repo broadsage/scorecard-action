@@ -35,6 +35,9 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
       - name: Validate Dependabot PR
         id: validate-pr
         run: |
@@ -43,11 +46,16 @@ jobs:
           echo "👤 Author: ${{ github.event.pull_request.user.login }}"
           echo "🏷️ Labels: ${{ join(github.event.pull_request.labels.*.name, ', ') }}"
           
-          # Check if PR modifies workflow files
-          WORKFLOW_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path | select(startswith(".github/workflows/"))')
+          # Check if PR modifies workflow files using gh CLI
+          echo "🔍 Checking if PR modifies workflow files..."
+          WORKFLOW_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].filename | select(startswith(".github/workflows/"))')
+          
           if [[ -n "$WORKFLOW_FILES" ]]; then
-            echo "⚠️ PR modifies workflow files: $WORKFLOW_FILES"
-            echo "🔒 Workflow modifications require 'actions: write' permission"
+            echo "⚠️ PR modifies workflow files:"
+            echo "$WORKFLOW_FILES"
+            echo "🔒 Workflow modifications require 'actions: write' permission (configured)"
+          else
+            echo "✅ No workflow files modified"
           fi
           
           # For a simple scorecard action, all Dependabot dependency PRs are safe to merge
