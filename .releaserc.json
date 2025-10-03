@@ -1,0 +1,38 @@
+{
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "action.yml",
+            "label": "GitHub Action Definition"
+          },
+          {
+            "path": "README.md",
+            "label": "Documentation"
+          }
+        ],
+        "successComment": false,
+        "releasedLabels": ["released"]
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "verifyReleaseCmd": "echo 'Verifying release for ${nextRelease.version}'",
+        "publishCmd": "echo 'Released ${nextRelease.version}' && git tag -f v${nextRelease.major} && git push origin --force v${nextRelease.major}"
+      }
+    ]
+  ],
+  "branches": [
+    "main",
+    {
+      "name": "next",
+      "prerelease": true
+    }
+  ],
+  "repositoryUrl": "https://github.com/broadsage/scorecard-action.git"
+}

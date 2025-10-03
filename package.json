@@ -1,0 +1,19 @@
+{
+  "name": "scorecard-action",
+  "version": "0.0.0-development",
+  "description": "OpenSSF Scorecard Action with workflow enhancements",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/broadsage/scorecard-action.git"
+  },
+  "keywords": ["github-action", "security", "scorecard", "openssf"],
+  "author": "Broadsage Security Team",
+  "license": "Apache-2.0",
+  "private": true,
+  "devDependencies": {
+    "semantic-release": "^23.0.0"
+  },
+  "scripts": {
+    "semantic-release": "semantic-release"
+  }
+}
