@@ -137,6 +137,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Clean Repository State
+        run: |
+          # Remove any leftover dist files that could make git dirty
+          rm -rf dist/
+          
+          # Clean any untracked files
+          git clean -fd
+          
+          # Ensure we have a clean state
+          git status --porcelain
+
       - name: Create Tag and Release
         run: |
           VERSION="${{ needs.analyze-and-release.outputs.new-version }}"
