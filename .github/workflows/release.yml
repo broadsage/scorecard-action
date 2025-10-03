@@ -148,7 +148,7 @@ jobs:
 
       - name: Run GoReleaser (Dry Run)
         if: inputs.dry_run == true
-        uses: goreleaser/goreleaser-action@ac067437f516133269923265894e77920c3dce18 # v6.1.0
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.1.0
         with:
           distribution: goreleaser
           version: '~> v2'
@@ -159,7 +159,7 @@ jobs:
       - name: Run GoReleaser (Release)
         if: inputs.dry_run != true
         id: goreleaser
-        uses: goreleaser/goreleaser-action@ac067437f516133269923265894e77920c3dce18 # v6.1.0
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.1.0
         with:
           distribution: goreleaser
           version: '~> v2'
