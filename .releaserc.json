@@ -5,16 +5,6 @@
     [
       "@semantic-release/github",
       {
-        "assets": [
-          {
-            "path": "action.yml",
-            "label": "GitHub Action Definition"
-          },
-          {
-            "path": "README.md",
-            "label": "Documentation"
-          }
-        ],
         "successComment": false,
         "releasedLabels": ["released"]
       }
