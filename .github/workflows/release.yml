@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_version: ${{ steps.version.outputs.version }}
-      release_url: ${{ steps.goreleaser.outputs.release_url }}
+      artifacts: ${{ steps.goreleaser.outputs.artifacts }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
@@ -186,8 +186,10 @@ jobs:
           
           if [[ "${{ steps.goreleaser.outcome }}" == "success" ]]; then
             echo "**Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
-            if [[ -n "${{ steps.goreleaser.outputs.release_url }}" ]]; then
-              echo "**Release URL:** ${{ steps.goreleaser.outputs.release_url }}" >> $GITHUB_STEP_SUMMARY
+            # Construct release URL manually
+            if [[ "${{ github.event_name }}" == "push" && "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]]; then
+              RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+              echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}" >> $GITHUB_STEP_SUMMARY
             fi
           else
             echo "**Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
@@ -231,7 +233,10 @@ jobs:
         if: needs.release.result == 'success'
         run: |
           echo "🎉 Successfully released ${{ needs.release.outputs.release_version }}"
-          echo "🔗 Release URL: ${{ needs.release.outputs.release_url }}"
+          if [[ "${{ github.event_name }}" == "push" && "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]]; then
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+            echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}"
+          fi
           
       - name: Notify Failure
         if: needs.release.result == 'failure'
