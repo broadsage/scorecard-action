@@ -48,7 +48,7 @@ jobs:
           
           # Check if PR modifies workflow files using gh CLI
           echo "🔍 Checking if PR modifies workflow files..."
-          WORKFLOW_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].filename | select(startswith(".github/workflows/"))')
+          WORKFLOW_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].filename | select(. != null and startswith(".github/workflows/"))')
           
           if [[ -n "$WORKFLOW_FILES" ]]; then
             echo "⚠️ PR modifies workflow files:"
