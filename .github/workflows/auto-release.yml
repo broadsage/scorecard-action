@@ -137,12 +137,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create and Push Tag
+      - name: Create Tag and Release
         run: |
           VERSION="${{ needs.analyze-and-release.outputs.new-version }}"
           BUMP_TYPE="${{ needs.analyze-and-release.outputs.version-bump }}"
           
-          echo "🏷️ Creating tag: $VERSION (${BUMP_TYPE} release)"
+          echo "🏷️ Creating tag and release: $VERSION (${BUMP_TYPE} release)"
           
           # Create tag with detailed message
           git tag -a "$VERSION" -m "Automated $BUMP_TYPE release $VERSION
@@ -152,16 +152,61 @@ jobs:
           
           This release was created automatically by GitHub Actions."
           
-          # Push tag to trigger release workflow
+          # Push tag
           git push origin "$VERSION"
           
           echo "✅ Tag $VERSION created and pushed!"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.1.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COSIGN_EXPERIMENTAL: 1
+
+      - name: Update Major Version Tag
+        run: |
+          VERSION="${{ needs.analyze-and-release.outputs.new-version }}"
           
-          # Create job summary
-          echo "## 🚀 Automated Release Created" >> $GITHUB_STEP_SUMMARY
+          # Extract major version (e.g., v1.2.3 -> v1)
+          if [[ $VERSION =~ ^v([0-9]+)\. ]]; then
+            MAJOR_VERSION="v${BASH_REMATCH[1]}"
+            echo "🔄 Updating major version tag: $MAJOR_VERSION -> $VERSION"
+            
+            # Create or update major version tag
+            git tag -f "$MAJOR_VERSION" "$VERSION"
+            git push --force origin "$MAJOR_VERSION"
+            
+            echo "✅ Major version tag $MAJOR_VERSION updated to point to $VERSION"
+          else
+            echo "⚠️ Could not parse major version from $VERSION"
+          fi
+
+      - name: Generate Job Summary
+        if: always()
+        run: |
+          VERSION="${{ needs.analyze-and-release.outputs.new-version }}"
+          BUMP_TYPE="${{ needs.analyze-and-release.outputs.version-bump }}"
+          
+          echo "## 🚀 Automated Release Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Type:** $BUMP_TYPE release" >> $GITHUB_STEP_SUMMARY
           echo "**Trigger:** Conventional commits analysis" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The GoReleaser workflow will now run automatically to create the GitHub release." >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "**Status:** ✅ Success" >> $GITHUB_STEP_SUMMARY
+            echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/$VERSION" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Usage" >> $GITHUB_STEP_SUMMARY
+            echo "Update your workflows to use the new version:" >> $GITHUB_STEP_SUMMARY
+            echo '```yaml' >> $GITHUB_STEP_SUMMARY
+            echo "uses: ${{ github.repository }}@$VERSION" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Status:** ❌ Failed" >> $GITHUB_STEP_SUMMARY
+          fi
