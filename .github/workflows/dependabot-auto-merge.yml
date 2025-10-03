@@ -23,6 +23,7 @@ jobs:
       contents: write # Required for merging PRs
       pull-requests: write # Required for approving and merging PRs
       checks: read # Required to read check status
+      actions: write # Required to merge PRs that modify workflows
     if: |
       github.actor == 'dependabot[bot]' &&
       contains(github.event.pull_request.labels.*.name, 'dependencies') &&
@@ -42,6 +43,13 @@ jobs:
           echo "👤 Author: ${{ github.event.pull_request.user.login }}"
           echo "🏷️ Labels: ${{ join(github.event.pull_request.labels.*.name, ', ') }}"
           
+          # Check if PR modifies workflow files
+          WORKFLOW_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path | select(startswith(".github/workflows/"))')
+          if [[ -n "$WORKFLOW_FILES" ]]; then
+            echo "⚠️ PR modifies workflow files: $WORKFLOW_FILES"
+            echo "🔒 Workflow modifications require 'actions: write' permission"
+          fi
+          
           # For a simple scorecard action, all Dependabot dependency PRs are safe to merge
           if [[ "${{ github.event.pull_request.user.login }}" == "dependabot[bot]" ]]; then
             echo "✅ Dependabot PR validated - safe for auto-merge"
@@ -51,6 +59,8 @@ jobs:
             echo "validation_passed=false" >> $GITHUB_OUTPUT
             exit 1
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Approve Dependabot PR
         if: steps.validate-pr.outputs.validation_passed == 'true'
