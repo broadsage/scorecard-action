@@ -6,7 +6,10 @@
       "@semantic-release/github",
       {
         "successComment": false,
-        "releasedLabels": ["released"]
+        "releasedLabels": ["released"],
+        "addReleases": "top",
+        "draft": false,
+        "prerelease": false
       }
     ],
     [
@@ -20,8 +23,7 @@
       "@semantic-release/exec",
       {
         "verifyReleaseCmd": "echo 'Verifying release for ${nextRelease.version}'",
-        "prepareCmd": "node scripts/update-contributors.js",
-        "publishCmd": "echo 'Released ${nextRelease.version}' && git tag -f v${nextRelease.major} && git push origin --force v${nextRelease.major}"
+        "prepareCmd": "node scripts/update-contributors.js"
       }
     ]
   ],
