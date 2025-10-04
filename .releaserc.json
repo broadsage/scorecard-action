@@ -15,15 +15,14 @@
     [
       "@semantic-release/git",
       {
-        "assets": ["package.json", "CONTRIBUTORS.md", "CHANGELOG.md"],
+        "assets": ["package.json", "CHANGELOG.md"],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ],
     [
       "@semantic-release/exec",
       {
-        "verifyReleaseCmd": "echo 'Verifying release for ${nextRelease.version}'",
-        "prepareCmd": "node scripts/update-contributors.js"
+        "verifyReleaseCmd": "echo 'Verifying release for ${nextRelease.version}'"
       }
     ]
   ],
