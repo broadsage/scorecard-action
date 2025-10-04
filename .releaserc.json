@@ -5,7 +5,7 @@
     [
       "@semantic-release/github",
       {
-        "successComment": false,
+        "successCommentCondition": false,
         "releasedLabels": ["released"],
         "addReleases": "top",
         "draft": false,
