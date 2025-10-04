@@ -74,6 +74,12 @@ jobs:
           echo "🚀 Running semantic-release for GitHub Action..."
           echo "📝 Using committer: $(git config --global user.name) <$(git config --global user.email)>"
           echo "🔐 GPG signing: $(git config --global commit.gpgsign)"
+          
+          # Temporarily disable GPG signing for semantic-release to avoid hanging
+          git config --global commit.gpgsign false
+          git config --global tag.gpgsign false
+          echo "⚠️ Temporarily disabled GPG signing for semantic-release"
+          
           npm run semantic-release
 
       - name: Generate Release Summary
