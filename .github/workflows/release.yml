@@ -65,20 +65,40 @@ jobs:
 
       - name: Create Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use standard token temporarily
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_AUTHOR_NAME: broadsage-autobot
           GIT_AUTHOR_EMAIL: broadsage-autobot@broadsage.com
           GIT_COMMITTER_NAME: broadsage-autobot
           GIT_COMMITTER_EMAIL: broadsage-autobot@broadsage.com
+          # Enable GPG signing for semantic-release
+          SEMANTIC_RELEASE_GPG_SIGN: "true"
         run: |
           echo "🚀 Running semantic-release for GitHub Action..."
           echo "📝 Using committer: $(git config --global user.name) <$(git config --global user.email)>"
-          echo "🔐 GPG signing: $(git config --global commit.gpgsign)"
           
-          # Temporarily disable GPG signing for semantic-release to avoid hanging
-          git config --global commit.gpgsign false
-          git config --global tag.gpgsign false
-          echo "⚠️ Temporarily disabled GPG signing for semantic-release"
+          # Configure GPG for semantic-release
+          GPG_KEY_ID=$(git config --global user.signingkey)
+          if [ -n "$GPG_KEY_ID" ]; then
+            echo "🔐 GPG Key ID: $GPG_KEY_ID"
+            echo "🔐 Enabling GPG signing for releases..."
+            
+            # Configure git for GPG signing with semantic-release
+            git config --global commit.gpgsign true
+            git config --global tag.gpgsign true
+            git config --global gpg.program gpg
+            
+            # Test GPG signing
+            echo "test" | gpg --clearsign > /dev/null && echo "✅ GPG signing test passed" || echo "⚠️ GPG signing test failed"
+          else
+            echo "⚠️ No GPG signing key found, proceeding without GPG signatures"
+            git config --global commit.gpgsign false
+            git config --global tag.gpgsign false
+          fi
+          
+          echo "🔐 Final GPG config:"
+          echo "  commit.gpgsign: $(git config --global commit.gpgsign)"
+          echo "  tag.gpgsign: $(git config --global tag.gpgsign)"
+          echo "  user.signingkey: $(git config --global user.signingkey)"
           
           npm run semantic-release
 
