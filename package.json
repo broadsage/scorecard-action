@@ -7,7 +7,10 @@
     "url": "https://github.com/broadsage/scorecard-action.git"
   },
   "keywords": ["github-action", "security", "scorecard", "openssf"],
-  "author": "Broadsage Security Team",
+  "author": "Broadsage Corportaion",
+  "contributors": [
+    "Broadsage Corporation"
+  ],
   "license": "Apache-2.0",
   "private": true,
   "devDependencies": {
@@ -15,6 +18,7 @@
     "@semantic-release/commit-analyzer": "^13.0.0",
     "@semantic-release/release-notes-generator": "^14.0.0",
     "@semantic-release/github": "^11.0.0",
+    "@semantic-release/git": "^10.0.0",
     "@semantic-release/exec": "^6.0.0"
   },
   "scripts": {
