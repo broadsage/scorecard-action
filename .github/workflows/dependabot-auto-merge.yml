@@ -28,7 +28,7 @@ jobs:
       github.actor == 'dependabot[bot]' &&
       contains(github.event.pull_request.labels.*.name, 'dependencies') &&
       github.event.pull_request.draft == false
-    
+
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a # v2.13.1
@@ -42,7 +42,7 @@ jobs:
         id: validate-pr
         run: |
           echo "🔍 Validating Dependabot PR for auto-merge..."
-          echo "📋 PR Title: ${{ github.event.pull_request.title }}"
+          echo "📋 PR Title: ${GITHUB_EVENT_PR_TITLE}"
           echo "👤 Author: ${{ github.event.pull_request.user.login }}"
           echo "🏷️ Labels: ${{ join(github.event.pull_request.labels.*.name, ', ') }}"
           
@@ -68,7 +68,8 @@ jobs:
             exit 1
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_PR_TITLE: "${{ github.event.pull_request.title }}"
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Approve Dependabot PR
         if: steps.validate-pr.outputs.validation_passed == 'true'
